@@ -7,11 +7,10 @@ library(abind)
 library(refund)
 library(matrixcalc)
 
-gen_data_vs <- function(seed, p, n, nt, K, Z, sigma2){
+gen_data_vs <- function(seed, p, n, nt, K, Z, sigma2, gamma = 0){
   time_points <- cbind(seq(0, 1, length.out = nt), seq(0, pi/3, length.out = nt),
                        seq(-1, 1, length.out = nt), seq(0, pi/3, length.out = nt),
                        seq(-2, 1, length.out = nt), seq(-1, 1, length.out = nt))
-  gamma <- 0
   
   set.seed(seed)
   a1 <- rnorm(n, -4, 3)
@@ -28,11 +27,9 @@ gen_data_vs <- function(seed, p, n, nt, K, Z, sigma2){
   f1 <- rnorm(n, 4, 2)
   f2 <- rnorm(n, -3, 0.5)
   f3 <- rnorm(n, 1, 1)
-  
-  
-  
+
   X1 <- t(sapply(1:n, function(i){cos(2*pi*(time_points[,1] - a1[i])) + a2[i]}))
-  X2 <- t(sapply(1:n, function(i){b1[i]*cos(pi*time_points[,2]) + b2[i]}))
+  X2 <- t(sapply(1:n, function(i){b1[i]*sin(pi*time_points[,2]) + b2[i]}))
   X3 <- t(sapply(1:n, function(i){c1[i]*time_points[,3]^3 + c2[i]*time_points[,3]^2 + c3[i]*time_points[,3]}))
   X4 <- t(sapply(1:n, function(i){sin(2*(time_points[,4] - d1[i])) + d2[i]*time_points[,4]}))
   X5 <- t(sapply(1:n, function(i){e1[i]*cos(2*time_points[,5]) + e2[i]*time_points[,5]}))
@@ -95,9 +92,10 @@ gen_data_vs <- function(seed, p, n, nt, K, Z, sigma2){
   
   
   delta_t <- lapply(1:p, function(j){c(time_points[2,j], diff(time_points[,j]))})
-  set.seed(seed)
   g_ui <- rowSums(sapply(1:p, function(j){Z[j]*(crossprod(t(Xt[,,j]),beta[,,j]*delta_t[[j]]))}))
   
+  #g_ui = sapply(1:n, function(i){sum(sapply(1:p, function(j){trapz(time_points[,j], Z[j]*(Xt[i,,j]*beta[,,j]))}))})
+  set.seed(seed)
   Y <- g_ui + rnorm(n, mean = 0, sd = sqrt(sigma2))
   
   data_std <- std_pred(Xt, Y, beta, K, nt, p, n)
@@ -174,174 +172,18 @@ std_pred <- function(Xt, Y, beta, K = 6, nt = 50, p = 6, n = 100){
 
 
 
-# Run VB for each simulated dataset
-sim <- function(seed, nsim, n, sigma2, folder){
-  
-  dir.create(folder, showWarnings = FALSE)
-  
-  seed <- seed + nsim
-  Z <- c(1,1,0,1,0,0)
-  p <- 6
-  K <- 6
-  nt <- 50
-  time_points <- cbind(seq(0, 1, length.out = nt), seq(0, pi/3, length.out = nt),
-                       seq(-1, 1, length.out = nt), seq(0, pi/3, length.out = nt),
-                       seq(-2, 1, length.out = nt), seq(-1, 1, length.out = nt))
-  
-  ids <- split(1:(K*p), rep(1:p, each = K))
-  
-  data <- gen_data_vs(seed, p, n, nt, K, Z, sigma2)
 
-  # use Y
-  Y_std <- data$Y_std
-  Y <- data$Y
-  W_mat <- data$W_mat
-  B <- data$B
-  beta <- data$beta
-  beta_std <- data$beta_std
-  Z <- data$Z
-  
-  save(data, file = paste0(folder,"/data_", nsim, ".RData"))
-  
-  delta1_0 <- 0.0001
-  delta2_0 <- 0.0001
-  a0 <- 0.6 #change these values
-  b0 <- 0.6
-  E_lambda2 <- rep(1, p)#c(5000,100)
-  shape_lambda_0 <- 1/3 #1/3 #0.001
-  rate_0 <- 0.001
-  Niter = 50
-  delta1_q <- n/2 + delta1_0 + (K*p)/2
-  
-  # initial values
-  Sigma0 = diag(0.01, K*p)
-  mu0 = as.vector(sapply(1:p, function(j){as.vector(lm(beta_std[,,j] ~ B[[j]] - 1)$coef)}))
-  #plot(time_points[,j], beta[,,j], type = "l", col = "red")
-  #lines(time_points[,j], B[[j]]%*%mu0[ids[[j]]], col = "blue", lty = 2)
-  
-  #Initial values
-  delta2_q <- (delta1_q - 1)*var(Y_std)
-  
-  E_inv_sigma2 <- delta1_q/delta2_q
-  
-  Sigma_b_q <- Sigma0
-  mu_b_q <- mu0
-  pz_q <- rep(1, p)
-  
-  iter = 0
-  E_eta <- c()
-  E_tau2 <- c()
-  chi_q <- rep(NA, K*p)
-  while(iter < Niter){
-    
-    # Step 1: Update variational of tau2
-    psi_q <- (diag(Sigma_b_q) + mu_b_q^2)*as.numeric(E_inv_sigma2) 
-    
-    for(j in 1:p){
-      chi_q[ids[[j]]] <- rep(E_lambda2[j], K)
-    }
-    
-    for(kj in 1:(K*p)){
-      E_eta[kj] <- Egig(lambda = 0.5, chi = chi_q[kj], psi = psi_q[kj], func = "1/x")
-      E_tau2[kj] <- Egig(lambda = 0.5, chi = chi_q[kj], psi = psi_q[kj], fun = "x")
-    }  
-    
-    # Step 1.1 update variational for lambda2
-    for(j in 1:p){
-      shape_lambda_q <- K + shape_lambda_0
-      rate_q <- 0.5*rate_0*sum(E_tau2[ids[[j]]])
-      E_lambda2[j] <- shape_lambda_q/rate_q
-    }
-    
-    # Step 2: Update variational of sigma2
-    A <- E_quad_b_Z(Sigma_b_q, mu_b_q, pz_q, W_mat, K, p) + sum(E_eta*(diag(Sigma_b_q) + mu_b_q^2))
-    
-    delta2_q <- A/2 + delta2_0
-    
-    E_inv_sigma2 <- delta1_q/delta2_q
-    if(E_inv_sigma2 < 0){stop('variance cannot be negative!')}
-    
-    # Step 3: Update variational of b
-    pz_long <- rep(pz_q, each = K)
-    
-    Omega <- pz_long%*%t(pz_long) + diag(pz_long)*(diag(1, K*p) - diag(pz_long))
-    
-    Q <- E_inv_sigma2*diag(E_eta) + E_inv_sigma2*((t(W_mat)%*%W_mat)*Omega)
-    if(is.singular.matrix(Q)){warning()}#; print(det(Q))} #if(is.singular.matrix(Q)){stop(); print(det(Q))}
-    Sigma_b_q <- solve(Q)
-    mu_b_q <- Sigma_b_q%*%(E_inv_sigma2*(diag(pz_long)%*%t(W_mat)%*%Y_std))
-    
-    # Step 4: Update variational of theta
-    a_q <- pz_q + a0
-    b_q <- 2 - pz_q - b0
-    
-    # Step 5: Update variational of Z
-    # for each j = 1, ..., p
-    
-    for(j in 1:p){
-      mu_qj <- mu_b_q[ids[[j]]]
-      W_j <- W_mat[,ids[[j]]]
-      Sigma_qj <- Sigma_b_q[ids[[j]], ids[[j]]]
-      
-      uzj <- digamma(a_q[j]) - digamma(b_q[j]) +
-        E_inv_sigma2*(t(mu_qj)%*%t(W_j)%*%Y_std -
-                        sum(diag(t(W_j)%*%W_j%*%Sigma_qj +
-                                   as.vector(mu_qj%*%(t(W_j)%*%W_j))%*%t(mu_qj)))/2) -
-        Sum_zi_notzj(j, p, W_mat, Sigma_b_q, mu_b_q, ids, pz_q)
-      
-      pz_q[j] <- if(uzj > 709){
-        1
-      } else{
-        exp(uzj)/(1+exp(uzj))
-      }
-    }
-    
-    mu_b_q_res <- array(mu_b_q, c(K, 1, p))
-    beta_hat <- array(NA, c(nt, 1, p))
-    for(j in 1:p){
-      beta_hat[,,j] <- B[[j]]%*%mu_b_q_res[,,j]
-    }
-    
-    
-    
-    
-    iter = iter + 1 
-    
-    #elbo_c <- elbo(Y, K_b, p, W_mat, delta1_q, delta2_q, Sigma_q, mu_q, pz_q, a_q, b_q, chi_q, psi_q, delta2_0, delta1_q, lambda, a0, b0)
-    
-    #converged <- check_convergence(elbo_c, elbo_prev, convergence_threshold)
-    
-    
-    #elbo_prev <- elbo_c
-    #print(elbo_c)
-    #print(iter)
-  }   
-  
-  for(j in 1:p){
-    plot(time_points[,j], beta_std[,,j], ylab = paste0('beta',j), xlab = expression(t), type = 'l', col = 'red')
-    lines(time_points[,j], beta_hat[,,j], col = "blue")
-  }
-  
-  Z_hat <- ifelse(pz_q > 0.5, 1, 0)
-  yhat_std <- rowSums(sapply(1:p, function(j){Z_hat[j]*(W_mat[,ids[[j]]]%*%mu_b_q_res[,,j])}))
-  y_hat <- yhat_std + mean(Y)
-  
-  res <- list(mu_b_q, Sigma_b_q, delta1_q, delta2_q, a_q, b_q, pz_q, E_lambda2)
-  
-  #source('Plot_results.R')
-  
-  
-  return(res)
-}    
+Z <- c(1,1,0,1,0,0)
+p <- 6
+K <- 6
+nt <- 50
 
-sim(seed = 1234, 1, 300, 0.2, 'TESTE')
-
-results_test <- lapply(1:100, function(i){sim(seed = 1234, i, 300, 0.2, 'TESTE')})
-save(results_test, file = 'TESTE/results.RData')
+results <- lapply(1:100, function(i){sim(1234,i,300,0.1,'Simulation SOFR VS STD/n300_sigma20.1', Z, p, K, nt)})
+save(results, file = 'Simulation SOFR VS STD/n300_sigma20.1/results.RData')
 
 
-
-n = 300
+nsim = 100
+n = 50
 K <- 6
 nt <- 50
 gamma <- 0
@@ -352,31 +194,27 @@ ids <- split(1:(K*p), rep(1:p, each = K))
 res <- c()
 res2 <- c()
 res3 <- c()
-load(paste0('TESTE',"/results.RData"))
-load(paste0('TESTE',"/data_1.RData"))
+load(paste0('TESTE/sigma0.01_n50',"/results.RData"))
+load(paste0('TESTE/sigma0.01_n50',"/data_1.RData"))
 
 
 
 
 # results for selection
-res_b <- matrix(do.call(rbind, lapply(results_test, `[[`, 1)), ncol = K*p, byrow = TRUE)
-res_pz <- do.call(rbind, lapply(results_test, `[[`, 7))
+res_b <- matrix(do.call(rbind, lapply(results, `[[`, 1)), ncol = K*p, byrow = TRUE)
+res_pz <- do.call(rbind, lapply(results, `[[`, 7))
 Zhat <- ifelse(res_pz > 0.5, 1,0)
-n_sel_j <- t(as.matrix(colSums(t(sapply(1:100, function(sim){as.numeric(Zhat[sim,] == Z)})))))
-n_sel_j2 <- t(as.matrix(colSums(t(sapply(1:100, function(sim){as.numeric(Zhat[sim,] == 1)})))))
-n_sel <- sum(sapply(1:100, function(sim){sum(Zhat[sim,] == Z) == p}))
+n_sel_j <- t(as.matrix(colSums(t(sapply(1:nsim, function(sim){as.numeric(Zhat[sim,] == Z)})))))
+n_sel_j2 <- t(as.matrix(colSums(t(sapply(1:nsim, function(sim){as.numeric(Zhat[sim,] == 1)})))))
+n_sel <- sum(sapply(1:nsim, function(sim){sum(Zhat[sim,] == Z) == p}))
 
 W_mat = data$W_mat
 
 # AMSE
-amse <- mean(sapply(1:100, function(i){rss_std(i, data, results_test)}))
+amse <- mean(sapply(1:nsim, function(i){rss_std(i, data, results)}))
 
-
-res <- rbind(res, data.frame(Case = model, AMSE = round(amse, 4), 'Correct models' = n_sel))
-res2 <- rbind(res2, data.frame(Case = model, n_sel_j))
-res3 <- rbind(res3, data.frame(Case = model, n_sel_j2))
-
-
+library(xtable)
+options(xtable.include.rownames = FALSE, xtable.booktabs = TRUE, xtable.caption.placement = "top", xtable.sanitize.text.function = function(x){x})
 
 
 B <- data$B
@@ -389,20 +227,27 @@ time_points <- cbind(seq(0, 1, length.out = nt), seq(0, pi/3, length.out = nt),
 
 ids <- split(1:(K*p), rep(1:p, each = K))
 
-res_b <- matrix(do.call(rbind, lapply(results_test, `[[`, 1)), ncol = K*p, byrow = TRUE)
-res_pz <- do.call(rbind, lapply(results_test, `[[`, 7))
+res_b <- matrix(do.call(rbind, lapply(results, `[[`, 1)), ncol = K*p, byrow = TRUE)
+res_pz <- do.call(rbind, lapply(results, `[[`, 7))
 
 
 
 beta_hat <- array(NA, c(nt, 1, p))
+beta_hat_all <- array(NA, c(nsim, nt, p))
 for(j in 1:p){
-  beta_hat[,,j] <- B[[j]]%*%(colMeans(res_b)[ids[[j]]])/sd_t[,,j]
+  #beta_hat[,,j] <- B[[j]]%*%(colMeans(res_b)[ids[[j]]])/sd_t[,,j]
+  beta_hat_all[,,j] <- t(sapply(1:nsim, function(s){(B[[j]]%*%(res_b[s,ids[[j]]]))/sd_t[,,j]}))
+  beta_hat[,,j] <- colMeans(beta_hat_all[,,j])
 }
 pdf(paste0(case,'/results_VB.pdf'), width = 6, height = 6)
 for(j in 1:p){
-  plot(time_points[,j], beta[,,j], type = 'l', col = 'red', ylab = paste0('beta',j), xlab = "t", ylim = c(-1.5,1.5))
+  plot(time_points[,j], beta[,,j], type = 'l', col = 'red', ylab = paste0('beta',j), xlab = "t", ylim = c(-1.5,1.5), lty = 2)
+  for(s in 1:nsim){
+    lines(time_points[,j], beta_hat_all[s,,j], col = "gray")
+  }
   lines(time_points[,j], beta_hat[,,j], col = "blue")
-  legend("topleft", c('True', 'Estimated'), col = c("red", "blue"), lty = 1)
+  lines(time_points[,j], beta[,,j], col = 'red', lty = 2)
+  legend("topleft", c('True', 'Estimated'), col = c("red", "blue"), lty = c(2,1))
 }
 dev.off()
 
