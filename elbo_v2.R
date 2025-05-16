@@ -41,7 +41,9 @@ diff_sigma2 <- function(delta1_q, delta2_q, delta2_0, delta1_0){
   
   E_inv_sigma2 <- delta1_q/delta2_q
 
-  res <-  delta2_0 - log(delta2_q) - log(gamma(delta1_0)) + log(gamma(delta1_q)) + (delta1_q - delta1_0)*(log(delta2_q) - digamma(delta1_q)) + (delta2_q - delta2_0)*E_inv_sigma2
+  #res <-  delta2_0 - log(delta2_q) - log(gamma(delta1_0)) + log(gamma(delta1_q)) + (delta1_q - delta1_0)*(log(delta2_q) - digamma(delta1_q)) + (delta2_q - delta2_0)*E_inv_sigma2
+  
+  res <-  delta2_0 - log(delta2_q) - log(gamma(delta1_0)) + (delta1_q - delta1_0)*(log(delta2_q) - digamma(delta1_q)) + (delta2_q - delta2_0)*E_inv_sigma2
   return(res)
 }
 

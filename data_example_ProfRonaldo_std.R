@@ -6,9 +6,10 @@ library(fda)
 library(abind)
 library(refund)
 library(matrixcalc)
+#seq(0, 1, length.out = nt)
 
 gen_data_vs <- function(seed, p, n, nt, K, Z, sigma2, gamma = 0){
-  time_points <- cbind(seq(0, 1, length.out = nt), seq(0, pi/3, length.out = nt),
+  time_points <- cbind(seq(0, 2*pi, length.out = nt), seq(0, pi/3, length.out = nt),
                        seq(-1, 1, length.out = nt), seq(0, pi/3, length.out = nt),
                        seq(-2, 1, length.out = nt), seq(-1, 1, length.out = nt))
   
@@ -42,6 +43,8 @@ gen_data_vs <- function(seed, p, n, nt, K, Z, sigma2, gamma = 0){
   beta5 <- gamma*sin(pi*time_points[,5])
   beta6 <- rep(0, nt)
   
+  
+  
   Xt <- array(NA, c(n, nt, p))
   Xt[,,1] <- X1
   Xt[,,2] <- X2
@@ -63,7 +66,7 @@ gen_data_vs <- function(seed, p, n, nt, K, Z, sigma2, gamma = 0){
       A[i,,j] <- res$fd$coefs
       X_smooth[i,,j] <- eval.fd(time_points[,j], res$fd)
       J[,,j] <- inprod(basis, basis)
-      #plotfit.fd(Xt[i,,j], time_points, res$fd)
+      #plotfit.fd(Xt[i,,j], time_points[,j], res$fd)
     }
   }
   
@@ -90,11 +93,14 @@ gen_data_vs <- function(seed, p, n, nt, K, Z, sigma2, gamma = 0){
   beta[,,6] <- beta6
   #plot(time_points, beta[,,1])
   
+  for(j in c(1,2,4)){
+    plot(time_points[,j], beta[,,j], type = "l", ylab = paste0('beta', j))
+  }
   
   delta_t <- lapply(1:p, function(j){c(time_points[2,j], diff(time_points[,j]))})
   g_ui <- rowSums(sapply(1:p, function(j){Z[j]*(crossprod(t(Xt[,,j]),beta[,,j]*delta_t[[j]]))}))
   
-  #g_ui = sapply(1:n, function(i){sum(sapply(1:p, function(j){trapz(time_points[,j], Z[j]*(Xt[i,,j]*beta[,,j]))}))})
+  #g_ui = sapply(1:n, function(i){sum(sapply(1:p, function(j){trapz(time_points[,j], (X_smooth[i,,j]*(Z[j]*beta[,,j])))}))})
   set.seed(seed)
   Y <- g_ui + rnorm(n, mean = 0, sd = sqrt(sigma2))
   
@@ -105,7 +111,7 @@ gen_data_vs <- function(seed, p, n, nt, K, Z, sigma2, gamma = 0){
               Xbar_t = data_std$Xbar_t, sd_t = data_std$sd_t))
 }  
 
-std_pred <- function(Xt, Y, beta, K = 6, nt = 50, p = 6, n = 100){
+std_pred <- function(Xt, Y, beta, K , nt, p, n){
   
   X_bar_t <- array(NA, dim = c(1, nt, p))
   for(j in 1:p){
@@ -133,7 +139,6 @@ std_pred <- function(Xt, Y, beta, K = 6, nt = 50, p = 6, n = 100){
   X_smooth_est <- array(NA, dim = c(n, nt, p))
   A <- array(NA, dim = c(n, K, p))
   J <- array(NA, dim = c(K, K, p))
-  B <- list()
   for(i in 1:n){
     for(j in 1:p){
       basis <- create.bspline.basis(rangeval = range(time_points[,j]), nbasis = K)
@@ -169,7 +174,7 @@ std_pred <- function(Xt, Y, beta, K = 6, nt = 50, p = 6, n = 100){
   
 
 
-
+# run example
 
 
 
@@ -178,13 +183,15 @@ p <- 6
 K <- 6
 nt <- 50
 
-results <- lapply(1:100, function(i){sim(1234,i,300,0.1,'Simulation SOFR VS STD/n300_sigma20.1', Z, p, K, nt)})
-save(results, file = 'Simulation SOFR VS STD/n300_sigma20.1/results.RData')
+sim(2024,1,300,0.01,'TESTE2', Z, p, K, nt)
+
+results <- lapply(1:100, function(i){sim(1234,i,300,0.01,'TESTE2/K10', Z, p, K, nt)})
+save(results, file = 'TESTE2/K10/results.RData')
 
 
 nsim = 100
 n = 50
-K <- 6
+K <- 10
 nt <- 50
 gamma <- 0
 Z <- c(1,1,0,1,0,0)
@@ -194,8 +201,8 @@ ids <- split(1:(K*p), rep(1:p, each = K))
 res <- c()
 res2 <- c()
 res3 <- c()
-load(paste0('TESTE/sigma0.01_n50',"/results.RData"))
-load(paste0('TESTE/sigma0.01_n50',"/data_1.RData"))
+load(paste0('TESTE2/K10',"/results.RData"))
+load(paste0('TESTE2/K10',"/data_1.RData"))
 
 
 

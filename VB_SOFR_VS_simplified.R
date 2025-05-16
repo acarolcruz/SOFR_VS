@@ -59,7 +59,7 @@ sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
   
   ids <- split(1:(K*p), rep(1:p, each = K))
   
-  data <- gen_data_vs(seed = seed, p = p, n = n, nt = nt, K = K, Z = Z, sigma2 = sigma2)
+  data <- gen_data_vs(seed, p, n, nt, K, Z, sigma2)
   
   # use Y
   Y_std <- data$Y_std
@@ -72,13 +72,13 @@ sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
   
   save(data, file = paste0(folder,"/data_", nsim, ".RData"))
   
-  delta1_0 <- 0.0001#0.0001 
-  delta2_0 <- 0.0001#0.0001 
+  delta1_0 <- 0.01#0.0001 
+  delta2_0 <- 0.01#0.0001 
   a0 <- 0.5 #change these values
   b0 <- 0.5
-  E_lambda2 <- c(2,   1,  100,   1,  100, 100)#rep(1, p)#c(5000,100)
-  shape_lambda_0 <- 100#2 #1/3 #0.001 #stan recommend 2,0
-  rate_0 <- 1
+  E_lambda2 <- rep(1, p)#c(5000,100)
+  shape_lambda_0 <- 2 #2 #1/3 #0.001 #stan recomend 2,0
+  rate_0 <- 0.001
   
   # Are not updated within VB
   delta1_q <- n/2 + delta1_0 + (K*p)/2
@@ -87,8 +87,8 @@ sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
   # initial values
   Sigma0 = diag(0.01, K*p)
   mu0 = as.vector(sapply(1:p, function(j){as.vector(lm(beta_std[,,j] ~ B[[j]] - 1)$coef)}))
-  plot(time_points[,1], beta_std[,,1], type = "l", col = "red")
-  lines(time_points[,1], B[[1]]%*%mu0[ids[[1]]], col = "blue", lty = 2)
+  #plot(time_points[,j], beta[,,j], type = "l", col = "red")
+  #lines(time_points[,j], B[[j]]%*%mu0[ids[[j]]], col = "blue", lty = 2)
   
   #Initial values
   delta2_q <- (delta1_q - 1)*var(Y_std)
@@ -96,21 +96,21 @@ sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
   
   Sigma_b_q <- Sigma0
   mu_b_q <- mu0
-  pz_q <- Z#rep(1,p)
+  pz_q <- Z #rep(1,p)
   
   E_eta <- c()
   E_tau2 <- c()
   psi_q <- rep(NA, K*p)
   rate_q <- rep(NA, p)
   
-  Niter = 100
+  Niter = 1000
   iter = 1
   elbo_prev = 0
   converged <- FALSE
-  convergence_threshold = 0.001
+  convergence_threshold = 0.01
   start <- proc.time()
   while(iter < Niter & converged == FALSE){
-  #while(iter < Niter){
+    #while(iter < Niter){
     
     # Step 1: Update variational of tau2
     chi_q <- (diag(Sigma_b_q) + mu_b_q^2)*as.numeric(E_inv_sigma2) 
@@ -122,9 +122,6 @@ sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
     for(kj in 1:(K*p)){
       E_eta[kj] <- Egig(lambda = 0.5, chi = chi_q[kj], psi = psi_q[kj], func = "1/x")
       E_tau2[kj] <- Egig(lambda = 0.5, chi = chi_q[kj], psi = psi_q[kj], fun = "x")
-      
-      #E_eta[kj] <- Egig(lambda = 0.5, chi = psi_q[kj], psi = chi_q[kj], func = "1/x")
-      #E_tau2[kj] <- Egig(lambda = 0.5, chi = psi_q[kj], psi = chi_q[kj], fun = "x")
     }  
     
     # Step 1.1 update variational for lambda2
@@ -134,7 +131,7 @@ sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
     }
     
     # Step 2: Update variational of sigma2
-    A <- E_quad_y(Y_std, pz_q, mu_b_q, W_mat, K, Sigma_b_q) + sum(E_eta*(diag(Sigma_b_q) + mu_b_q^2))#E_quad_b_Z(Sigma_b_q, mu_b_q, pz_q, W_mat, K, p) + sum(E_eta*(diag(Sigma_b_q) + mu_b_q^2))
+    A <- E_quad_y(Y_std, pz_q, mu_b_q, W_mat, K, Sigma_b_q)+ sum(E_eta*(diag(Sigma_b_q) + mu_b_q^2))
     
     delta2_q <- A/2 + delta2_0
     
@@ -154,28 +151,28 @@ sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
     # Step 4: Update variational of theta
     a_q <- pz_q + a0
     b_q <- 2 - pz_q - b0
-
+    
     # Step 5: Update variational of Z
     # for each j = 1, ..., p
-
+    
     for(j in 1:p){
       mu_qj <- mu_b_q[ids[[j]]]
       W_j <- W_mat[,ids[[j]]]
       Sigma_qj <- Sigma_b_q[ids[[j]], ids[[j]]]
-
+      
       uzj <- digamma(a_q[j]) - digamma(b_q[j]) +
         as.numeric(E_inv_sigma2)*(t(mu_qj)%*%t(W_j)%*%Y_std -
-                        sum(diag(t(W_j)%*%W_j%*%Sigma_qj +
-                                   as.vector(mu_qj%*%(t(W_j)%*%W_j))%*%t(mu_qj)))/2) -
+                                    sum(diag(t(W_j)%*%W_j%*%Sigma_qj +
+                                               as.vector(mu_qj%*%(t(W_j)%*%W_j))%*%t(mu_qj)))/2) -
         Sum_zi_notzj(j, p, W_mat, Sigma_b_q, mu_b_q, ids, pz_q)
-
+      
       pz_q[j] <- if(uzj > 709){
         1
       } else{
         exp(uzj)/(1+exp(uzj))
       }
     }
-
+    
     mu_b_q_res <- array(mu_b_q, c(K, 1, p))
     beta_hat <- array(NA, c(nt, 1, p))
     for(j in 1:p){

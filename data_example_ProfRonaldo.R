@@ -135,7 +135,7 @@ sim <- function(seed, sim){
   B <- data$B
   beta <- data$beta
   
-  save(data, file = paste0("Simulation Ronaldo/data", "_", sim, ".RData"))
+  #save(data, file = paste0("Simulation Ronaldo/data", "_", sim, ".RData"))
   
   delta1_0 <- 0.0001
   delta2_0 <- 0.0001
@@ -179,7 +179,7 @@ sim <- function(seed, sim){
     
     for(j in 1:p){
       shape_lambda_q <- K + shape_lambda_0
-      rate_q <- 0.5*rate_0*sum(E_tau2[ids[[j]]])
+      rate_q <- rate_0 + 0.5*sum(E_tau2[ids[[j]]])
       E_lambda2[j] <- shape_lambda_q/rate_q
     }
     

@@ -12,24 +12,31 @@ rss <- function(i, data, results, std = TRUE){
     yhat <- mean(data$Y) + rowSums(sapply(1:p, function(j){Z_hat[j]*(W_mat[,ids[[j]]]%*%mu_b_q[ids[[j]]])}))
   }
   
+  plot(yhat, data$Y)
+  abline(a=0, b=1, col = "red")
+  
+  plot(data$Y, data$Y - yhat)
+  abline(a=0, b=0, col = "red")
+  
   RSS <- sum((data$Y - yhat)^2/n)
   return(RSS)
 }
 
-# rss_std <- function(i, data, results){
-#   Y <- data$Y
-#   W_mat <- data$W_mat
-#   mu_b_q <- results[[i]][[1]]
-#   pz_q <- results[[i]][[7]]
-#   Z_hat <- ifelse(pz_q > 0.5, 1, 0)
-#   yhat <- mean(data$Y) + rowSums(sapply(1:p, function(j){Z_hat[j]*(W_mat[,ids[[j]]]%*%mu_b_q[ids[[j]]])}))
-#   
-#   RSS <- sum((Y - yhat)^2/n)
-#   return(RSS)
-# }
+rss_std <- function(i, data, results){
+  Y <- data$Y
+  W_mat <- data$W_mat
+  mu_b_q <- results[[i]][[1]]
+  pz_q <- results[[i]][[7]]
+  Z_hat <- ifelse(pz_q > 0.5, 1, 0)
+  yhat <- mean(data$Y) + rowSums(sapply(1:p, function(j){Z_hat[j]*(W_mat[,ids[[j]]]%*%mu_b_q[ids[[j]]])}))
+
+  RSS <- sum((Y - yhat)^2/n)
+  return(RSS)
+}
 
 
-folder <- 'Simulation SOFR VS STD'
+#folder <- 'Simulation SOFR VS STD'
+folder <- 'Simulation Ronaldo VS'
 sub_folders <- list.dirs(folder)[-1]
 
 res <- c()
@@ -61,8 +68,8 @@ for(case in sub_folders){
   # results for selection
   res_b <- matrix(do.call(rbind, lapply(results, `[[`, 1)), ncol = K*p, byrow = TRUE)
   res_pz <- do.call(rbind, lapply(results, `[[`, 7))
-  res_time <- do.call(rbind, lapply(results, `[[`, 10))
-  res_iter <- do.call(rbind, lapply(results, `[[`, 9))
+  #res_time <- do.call(rbind, lapply(results, `[[`, 10))
+  #res_iter <- do.call(rbind, lapply(results, `[[`, 9))
   
   Zhat <- ifelse(res_pz > 0.5, 1,0)
   n_sel_j <- t(as.matrix(colSums(t(sapply(1:100, function(sim){as.numeric(Zhat[sim,] == Z)})))))
@@ -71,11 +78,11 @@ for(case in sub_folders){
   
   # AMSE
   ids <- split(1:(K*p), rep(1:p, each = K))
-  amse <- mean(sapply(1:100, function(i){rss(i, data, results)}))
+  amse <- mean(sapply(1:100, function(i){rss(i, data, results, std = FALSE)}))
  
   
   
-  res <- rbind(res, data.frame(Case = model, AMSE = round(amse, 4), Mean_time = round(mean(res_time), 4), 
+  res <- rbind(res, data.frame(Case = model, AMSE = round(amse, 4), Correct = n_sel, Mean_time = round(mean(res_time), 4), 
                                Mean_iter = round(mean(res_iter), 4)))
   res2 <- rbind(res2, data.frame(Case = model, n_sel_j))
   res3 <- rbind(res3, data.frame(Case = model, n_sel_j2))
@@ -94,10 +101,17 @@ for(case in sub_folders){
   
   
   beta_hat <- array(NA, c(nt, 1, p))
-  # for non-std case:
-  # for(j in 1:p){
-  #   beta_hat[,,j] <- B[[j]]%*%(colMeans(res_b)[ids[[j]]])
-  # }
+  #for non-std case:
+  for(j in 1:p){
+     beta_hat[,,j] <- B[[j]]%*%(colMeans(res_b)[ids[[j]]])
+  }
+  
+  beta_hat_all <- array(NA, c(nsim, nt, p))
+  for(j in 1:p){
+    #beta_hat[,,j] <- B[[j]]%*%(colMeans(res_b)[ids[[j]]])/sd_t[,,j]
+    beta_hat_all[,,j] <- t(sapply(1:nsim, function(s){(B[[j]]%*%(res_b[s,ids[[j]]]))}))
+    beta_hat[,,j] <- colMeans(beta_hat_all[,,j])
+  }
   
   # Standardized case
   beta_hat_all <- array(NA, c(nsim, nt, p))
@@ -118,13 +132,19 @@ for(case in sub_folders){
   
   pdf(paste0(case,'/results_VB.pdf'), width = 6, height = 6)
   # previous version:
-  # for(j in 1:p){
-  #   plot(time_points[,j], beta[,,j], type = 'l', col = 'red', ylab = paste0('beta',j), xlab = "t", ylim = c(-1.5,1.5))
-  #   lines(time_points[,j], beta_hat[,,j], col = "blue")
-  #   legend("topleft", c('True', 'Estimated'), col = c("red", "blue"), lty = 1)
-  # }
+  for(j in 1:p){
+     plot(time_points[,j], beta[,,j], type = 'l', col = 'red', ylab = paste0('beta',j), xlab = "t", ylim = c(-1.5,1.5))
+     lines(time_points[,j], beta_hat[,,j], col = "blue")
+     
+     for(s in 1:nsim){
+       lines(time_points[,j], beta_hat_all[s,,j], col = "gray")
+     }
+     
+     legend("topleft", c('True', 'Estimated'), col = c("red", "blue"), lty = 1)
+   }
   
   # New version with gray curves
+  pdf(paste0('results_VB_std_all.pdf'), width = 6, height = 6)
   for(j in 1:p){
     plot(time_points[,j], beta[,,j], type = 'l', col = 'red', ylab = paste0('beta',j), xlab = "t", ylim = c(-1.5,1.5), lty = 2)
     for(s in 1:nsim){
