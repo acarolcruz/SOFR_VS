@@ -103,7 +103,7 @@ sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
   psi_q <- rep(NA, K*p)
   rate_q <- rep(NA, p)
   
-  Niter = 100
+  Niter = 500
   iter = 1
   elbo_prev = 0
   converged <- FALSE
@@ -193,7 +193,7 @@ sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
     
     
     elbo_prev <- elbo_c
-    #print(elbo_c)
+    print(elbo_c)
     #print(iter)
   }
   runtime_VB <- proc.time() - start

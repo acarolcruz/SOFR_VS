@@ -9,7 +9,7 @@ library(matrixcalc)
 #seq(0, 1, length.out = nt)
 
 gen_data_vs <- function(seed, p, n, nt, K, Z, sigma2, gamma = 0){
-  time_points <- cbind(seq(0, 2*pi, length.out = nt), seq(0, pi/3, length.out = nt),
+  time_points <- cbind(seq(0, 1, length.out = nt), seq(0, pi/3, length.out = nt),
                        seq(-1, 1, length.out = nt), seq(0, pi/3, length.out = nt),
                        seq(-2, 1, length.out = nt), seq(-1, 1, length.out = nt))
   
@@ -52,6 +52,13 @@ gen_data_vs <- function(seed, p, n, nt, K, Z, sigma2, gamma = 0){
   Xt[,,4] <- X4
   Xt[,,5] <- X5
   Xt[,,6] <- X6
+  
+  plot(time_points[,1], Xt[1,,1], type = "l");for(i in 2:n){lines(time_points[,1], Xt[i,,1], col = "grey")}
+  plot(time_points[,2], Xt[1,,2], type = "l");for(i in 2:n){lines(time_points[,2], Xt[i,,2], col = "grey")}
+  plot(time_points[,3], Xt[1,,3], type = "l");for(i in 2:n){lines(time_points[,3], Xt[i,,3], col = "grey")} 
+  plot(time_points[,4], Xt[1,,4], type = "l");for(i in 2:n){lines(time_points[,4], Xt[i,,4], col = "grey")}
+  plot(time_points[,5], Xt[1,,5], type = "l");for(i in 2:n){lines(time_points[,5], Xt[i,,5], col = "grey")}
+  plot(time_points[,6], Xt[1,,6], type = "l");for(i in 2:n){lines(time_points[,6], Xt[i,,6], col = "grey")}
   
   # Expand X(t)
   X_smooth <- array(NA, dim = c(n, nt, p))
@@ -183,7 +190,7 @@ p <- 6
 K <- 6
 nt <- 50
 
-sim(2024,1,300,0.01,'TESTE2', Z, p, K, nt)
+sim(2024,80,300,0.01,'TESTE2', Z, p, K, nt)
 
 results <- lapply(1:100, function(i){sim(1234,i,300,0.01,'TESTE2/K10', Z, p, K, nt)})
 save(results, file = 'TESTE2/K10/results.RData')

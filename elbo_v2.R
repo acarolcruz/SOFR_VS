@@ -14,10 +14,13 @@ E_log_like <- function(Y, K, p, W, delta1_q, delta2_q, Sigma_b_q, mu_b_q, pz){
 
 diff_z <- function(p, pz, a, b){
   
-  for(j in 1:p){if(pz[j] == 1){pz[j] = 0.99999} else if(pz[j] == 0){pz[j] <- 0.000001}}
+  #log_pz_c <- rep(NA, p)
+  #log_pz <- rep(NA, p)
+  #for(j in 1:p){if(pz[j] == 1){log_pz_c[j] = -99999999999}else{log_pz_c[j] = log(1-pz[j])}} 
+  #for(j in 1:p){if(pz[j] == 0){plog_pz[j] = 0}}#else if(pz[j] == 0){pz[j] <- 0.000001}}
   
   
-  res <- sum(sapply(1:p, function(j){pz[j]*(digamma(a[j]) - digamma(b[j]) - log(pz[j]) + log(1-pz[j])) + digamma(b[j]) - digamma(a[j] + b[j]) - log(1 - pz[j])}))
+  res <- sum(sapply(1:p, function(j){pz[j]*(digamma(a[j]) - digamma(b[j]) - log(pz[j]) + log(1-pz[j])) + digamma(b[j]) - digamma(a[j] + b[j]) - log(1-pz[j])}))
   return(res)
 }
 
@@ -32,8 +35,7 @@ diff_b <- function(K, p, delta1_q, delta2_q, chi_q, psi_q, mu_b_q, Sigma_b_q){
     E_eta[kj] <- Egig(lambda = 0.5, chi = chi_q[kj], psi = psi_q[kj], func = "1/x")
   }
   
-  res <- -(K*p/2)*(log(delta2_q) - digamma(delta1_q)) - 0.5*E_inv_sigma2*sum(diag(Sigma_b_q + mu_b_q%*%t(mu_b_q))*E_eta) +
-    0.5*log(det(Sigma_b_q)) +  0.5*K*p
+  res <- -(K*p/2)*(log(delta2_q) - digamma(delta1_q)) - 0.5*E_inv_sigma2*sum(diag(Sigma_b_q + mu_b_q%*%t(mu_b_q))*E_eta) + 0.5*log(det(Sigma_b_q)) + 0.5*K*p
   return(res) 
 }
 
@@ -41,9 +43,9 @@ diff_sigma2 <- function(delta1_q, delta2_q, delta2_0, delta1_0){
   
   E_inv_sigma2 <- delta1_q/delta2_q
 
-  #res <-  delta2_0 - log(delta2_q) - log(gamma(delta1_0)) + log(gamma(delta1_q)) + (delta1_q - delta1_0)*(log(delta2_q) - digamma(delta1_q)) + (delta2_q - delta2_0)*E_inv_sigma2
+  res <-  delta2_0 - log(delta2_q) - log(gamma(delta1_0)) + log(gamma(delta1_q)) + (delta1_q - delta1_0)*(log(delta2_q) - digamma(delta1_q)) + (delta2_q - delta2_0)*E_inv_sigma2
   
-  res <-  delta2_0 - log(delta2_q) - log(gamma(delta1_0)) + (delta1_q - delta1_0)*(log(delta2_q) - digamma(delta1_q)) + (delta2_q - delta2_0)*E_inv_sigma2
+  #res <-  delta2_0 - log(delta2_q) - log(gamma(delta1_0)) + (delta1_q - delta1_0)*(log(delta2_q) - digamma(delta1_q)) + (delta2_q - delta2_0)*E_inv_sigma2
   return(res)
 }
 
@@ -100,9 +102,9 @@ diff_theta <- function(a_q, b_q, a0, b0){
 elbo <- function(Y, K, p, W_mat, delta1_q, delta2_q, Sigma_b_q, mu_b_q, pz, a_q, b_q, chi_q, psi_q, delta2_0, delta1_0, shape_lambda_0, shape_lambda_q, rate_0, rate_q, a0, b0){
   
   res <- E_log_like(Y, K, p, W_mat, delta1_q, delta2_q, Sigma_b_q, mu_b_q, pz) + 
-    diff_z(p, pz, a_q, b_q) + diff_b(K, p, delta1_q, delta2_q, chi_q, psi_q, mu_b_q, Sigma_b_q) +
-    diff_sigma2(delta1_q, delta2_q, delta2_0, delta1_0) + diff_tau2(K, p, shape_lambda_q, rate_q, chi_q, psi_q) +
-    diff_lambda2(p, shape_lambda_0, shape_lambda_q, rate_0, rate_q) + diff_theta(a_q, b_q, a0, b0)
+    diff_z(p, pz, a_q, b_q) + 
+    diff_b(K, p, delta1_q, delta2_q, chi_q, psi_q, mu_b_q, Sigma_b_q) +
+    diff_sigma2(delta1_q, delta2_q, delta2_0, delta1_0) + diff_tau2(K, p, shape_lambda_q, rate_q, chi_q, psi_q) + diff_lambda2(p, shape_lambda_0, shape_lambda_q, rate_0, rate_q) + diff_theta(a_q, b_q, a0, b0)
   return(res)
 }
 
