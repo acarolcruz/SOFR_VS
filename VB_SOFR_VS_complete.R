@@ -39,13 +39,16 @@ Sum_zi_notzj <- function(j, p, W, Sigma, mu, ids, pz){
   notj <- (1:p)[1:p != j]
   W_j <- W[,ids[[j]]]
   mu_qj <- mu[ids[[j]]]
-  sum(sapply(notj, function(i){
+  
+  res <- sum(sapply(notj, function(i){
     mu_qi <- mu[ids[[i]]]
     W_i <- W[,ids[[i]]]
-    Sigma_ij <- Sigma[ids[[j]], ids[[i]]]
+    Sigma_ij <- Sigma[ids[[i]], ids[[j]]]
     
-    pz[i]*sum(diag((t(W_j)%*%W_i)%*%Sigma_ij + as.vector(mu_qj%*%(t(W_j)%*%W_i))%*%t(mu_qi)))}))
+    pz[i]*(sum(diag((t(W_j)%*%W_i)%*%(Sigma_ij + mu_qi%*%t(mu_qj)))))}))
+  return(res)
 }
+
 
 # Run VB for each simulated dataset
 sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
@@ -69,6 +72,7 @@ sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
   beta <- data$beta
   beta_std <- data$beta_std
   Z <- data$Z
+  sd_t <- data$sd_t
   
   save(data, file = paste0(folder,"/data_", nsim, ".RData"))
   
@@ -76,16 +80,16 @@ sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
   delta2_0 <- 0.0001#0.0001 
   a0 <- 0.5 #change these values
   b0 <- 0.5
-  E_lambda2 <- c(2,   1,  100,   1,  100, 100)#rep(1, p)#c(5000,100)
-  shape_lambda_0 <- 100#2 #1/3 #0.001 #stan recommend 2,0
-  rate_0 <- 1
+  E_lambda2 <- rep(0.0001, p)#c(5000,100)
+  shape_lambda_0 <- 2#2 #1/3 #0.001 #stan recommend 2,0
+  rate_0 <- 0.0001
   
   # Are not updated within VB
   delta1_q <- n/2 + delta1_0 + (K*p)/2
   shape_lambda_q <- rep(K + shape_lambda_0, p)
   
   # initial values
-  Sigma0 = diag(0.01, K*p)
+  Sigma0 = diag(1, K*p)
   mu0 = as.vector(sapply(1:p, function(j){as.vector(lm(beta_std[,,j] ~ B[[j]] - 1)$coef)}))
   plot(time_points[,1], beta_std[,,1], type = "l", col = "red")
   lines(time_points[,1], B[[1]]%*%mu0[ids[[1]]], col = "blue", lty = 2)
@@ -96,10 +100,10 @@ sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
   
   Sigma_b_q <- Sigma0
   mu_b_q <- mu0
-  pz_q <- Z#rep(1,p)
+  pz_q <- rep(1,p)
   
-  E_eta <- c()
-  E_tau2 <- c()
+  E_eta <- rep(NA, K*p)
+  E_tau2 <- rep(NA, K*p)
   psi_q <- rep(NA, K*p)
   rate_q <- rep(NA, p)
   
@@ -107,7 +111,7 @@ sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
   iter = 1
   elbo_prev = 0
   converged <- FALSE
-  convergence_threshold = 0.001
+  convergence_threshold = 0.01
   start <- proc.time()
   while(iter < Niter & converged == FALSE){
   #while(iter < Niter){
@@ -144,12 +148,19 @@ sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
     # Step 3: Update variational of b
     pz_long <- rep(pz_q, each = K)
     
-    Omega <- pz_long%*%t(pz_long) + diag(pz_long)*(diag(1, K*p) - diag(pz_long))
+    Omega <- pz_long%*%t(pz_long) + diag(pz_long)%*%(diag(1, K*p) - diag(pz_long))
     
-    Q <- as.numeric(E_inv_sigma2)*diag(E_eta) + as.numeric(E_inv_sigma2)*((t(W_mat)%*%W_mat)*Omega)
+    # previous
+    #Q <- as.numeric(E_inv_sigma2)*diag(E_eta) + as.numeric(E_inv_sigma2)*((t(W_mat)%*%W_mat)*Omega)
+    #if(is.singular.matrix(Q)){warning()}#; print(det(Q))} #if(is.singular.matrix(Q)){stop(); print(det(Q))}
+    #Sigma_b_q <- solve(Q)
+    #mu_b_q <- Sigma_b_q%*%(as.numeric(E_inv_sigma2)*(diag(pz_long)%*%t(W_mat)%*%Y_std))
+    
+    Q <- (diag(E_eta) + ((t(W_mat)%*%W_mat)*Omega))
     if(is.singular.matrix(Q)){warning()}#; print(det(Q))} #if(is.singular.matrix(Q)){stop(); print(det(Q))}
-    Sigma_b_q <- solve(Q)
-    mu_b_q <- Sigma_b_q%*%(as.numeric(E_inv_sigma2)*(diag(pz_long)%*%t(W_mat)%*%Y_std))
+    Sigma_b_q <- solve(as.numeric(E_inv_sigma2)*Q)
+    mu_b_q <- solve(Q)%*%(diag(pz_long)%*%t(W_mat)%*%Y_std)
+   
     
     # Step 4: Update variational of theta
     a_q <- pz_q + a0
@@ -166,8 +177,8 @@ sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
       uzj <- digamma(a_q[j]) - digamma(b_q[j]) +
         as.numeric(E_inv_sigma2)*(t(mu_qj)%*%t(W_j)%*%Y_std -
                         sum(diag(t(W_j)%*%W_j%*%Sigma_qj +
-                                   as.vector(mu_qj%*%(t(W_j)%*%W_j))%*%t(mu_qj)))/2) -
-        Sum_zi_notzj(j, p, W_mat, Sigma_b_q, mu_b_q, ids, pz_q)
+                                   as.vector(mu_qj%*%(t(W_j)%*%W_j))%*%t(mu_qj)))/2 -
+        Sum_zi_notzj(j, p, W_mat, Sigma_b_q, mu_b_q, ids, pz_q))
 
       pz_q[j] <- if(uzj > 709){
         1
@@ -175,22 +186,19 @@ sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
         exp(uzj)/(1+exp(uzj))
       }
     }
-
+    
+    print(pz_q)
     mu_b_q_res <- array(mu_b_q, c(K, 1, p))
     beta_hat <- array(NA, c(nt, 1, p))
     for(j in 1:p){
       beta_hat[,,j] <- B[[j]]%*%mu_b_q_res[,,j]
     }
     
-    
-    
-    
     iter = iter + 1 
     
     elbo_c <- elbo(Y_std, K, p, W_mat, delta1_q, delta2_q, Sigma_b_q, mu_b_q, pz_q, a_q, b_q, chi_q, psi_q, delta2_0, delta1_0, shape_lambda_0, shape_lambda_q, rate_0, rate_q, a0, b0)
     
     converged <- check_convergence(elbo_c, elbo_prev, convergence_threshold)
-    
     
     elbo_prev <- elbo_c
     print(elbo_c)
@@ -203,9 +211,17 @@ sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
     lines(time_points[,j], beta_hat[,,j], col = "blue")
   }
   
+   for(j in 1:p){
+    plot(time_points[,j], beta[,,j], ylab = paste0('beta',j), xlab = expression(t), type = 'l', col = 'red')
+    lines(time_points[,j], beta_hat[,,j]/sd_t[,,j], col = "blue")
+  }
+  
   Z_hat <- ifelse(pz_q > 0.5, 1, 0)
   yhat_std <- rowSums(sapply(1:p, function(j){Z_hat[j]*(W_mat[,ids[[j]]]%*%mu_b_q_res[,,j])}))
   y_hat <- yhat_std + mean(Y)
+  
+  plot(y_hat, Y)
+  abline(0,1)
   
   res <- list(mu_b = mu_b_q, Sigma_b = Sigma_b_q, delta1 = delta1_q, delta2 = delta2_q, a = a_q, b = b_q, pz = pz_q, E_lambda2, N_iter = iter, runtime = runtime_VB[[3]])
   
