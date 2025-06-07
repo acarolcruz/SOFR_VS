@@ -6,7 +6,7 @@ library(matrixcalc)
 
 p <- 2
 K <- 10
-sigma2 <- 0.01
+sigma2 <- 0.0025
 nt <- 100
 #n <- 100
 Z <- c(1,0)
@@ -148,6 +148,7 @@ Sum_zi_notzj <- function(j, p, W, Sigma, mu, ids, pz){
   return(res)
 }
 
+
 sim_oracle <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt, beta, B, time_points, std = TRUE){
   
   seed = seed + nsim
@@ -206,12 +207,12 @@ sim_oracle <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt, beta, B, time
   boxplot(g_ui)
   
   data <- list(Y = Y, beta = beta, Xt = X,  Xt_smooth = X_smooth, sigma2 = sigma2)
-  save(data, file = paste0(folder,"/data_", nsim, ".RData"))
+  #save(data, file = paste0(folder,"/data_", nsim, ".RData"))
   
   # Standardized predictors to fit model
   if(std == TRUE){
     data_std <- std_pred(data$Xt_smooth, Y, beta, K, nt, p, n)
-    save(data_std, file = paste0(folder,"/datastd_", nsim, ".RData"))
+    #save(data_std, file = paste0(folder,"/datastd_", nsim, ".RData"))
     
    
     
@@ -232,16 +233,16 @@ sim_oracle <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt, beta, B, time
   delta2_0 <- 0.0001 
   a0 <- 0.5 #change these values
   b0 <- 0.5
-  shape_lambda_0 <- 2#2 #1/3 #0.001 #stan recommend 2,0
+  shape_lambda_0 <- 2#2 #1/3 #0.001 #stan recommends 2,0
   rate_0 <- 0.001
-  E_lambda2 <- c(1,150) #rep(1, p)
+  E_lambda2 <- c(1,1)#c(1,150) 
   
   # Are not updated within VB
   delta1_q <- n/2 + delta1_0 + (K*p)/2
   shape_lambda_q <- rep(K + shape_lambda_0, p)
   
   # initial values
-  Sigma0 = diag(1, K*p)
+  Sigma0 = diag(0.1, K*p)
   if(std == TRUE){
     mu0 = as.vector(sapply(1:p, function(j){as.vector(lm(beta_std[,,j] ~ B[[j]]-1)$coef)}))
     plot(time_points, beta[,,1], type = "l", col = "red")
@@ -258,7 +259,7 @@ sim_oracle <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt, beta, B, time
   
   Sigma_b_q <- Sigma0
   mu_b_q <- mu0
-  pz_q <- rep(1,p)
+  pz_q <- Z#rep(1,p)
   
 
   psi_q <- rep(NA, K*p)
@@ -267,11 +268,11 @@ sim_oracle <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt, beta, B, time
   E_eta <- rep(NA, K*p)#1/tau2
   E_tau2<- rep(NA, K*p)#tau2
   
-  Niter = 100 #100
+  Niter = 500 #100
   iter = 1
   elbo_prev = 0
   converged <- FALSE
-  convergence_threshold = 0.0001
+  convergence_threshold = 0.001
   start <- proc.time()
   mu_b_q_c <- mu0
   while(iter < Niter & converged == FALSE){
@@ -298,7 +299,7 @@ sim_oracle <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt, beta, B, time
       rate_q[j] <- rate_0 + 0.5*sum(E_tau2[ids[[j]]])
       E_lambda2[j] <- shape_lambda_q[j]/rate_q[j]
     }
-    
+
     # Step 2: Update variational of sigma2
     if(std == TRUE){
       A <- E_quad_y(Y_std, pz_q, mu_b_q, W_mat, K, Sigma_b_q) + sum(E_eta*(diag(Sigma_b_q) + mu_b_q^2))#E_quad_b_Z(Sigma_b_q, mu_b_q, pz_q, W_mat, K, p) + sum(E_eta*(diag(Sigma_b_q) + mu_b_q^2))
@@ -337,48 +338,82 @@ sim_oracle <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt, beta, B, time
     #Step 5: Update variational of Z
     #for each j = 1, ..., p
     if(std == TRUE){
-      uzj <- c()
       for(j in 1:p){
-        coefs <- c(1,2)
-        notj <- coefs[coefs!=j]
-        mu_qj <- mu_b_q[ids[[j]]]
-        W_j <- W_mat[,ids[[j]]]
-        Sigma_qj <- Sigma_b_q[ids[[j]], ids[[j]]]
-
-        uzj[j] <- digamma(a_q[j]) - digamma(b_q[j]) + as.numeric(E_inv_sigma2)*(t(mu_qj)%*%t(W_j)%*%Y_std - (sum(diag((t(W_j)%*%W_j)%*%(Sigma_qj + mu_qj%*%t(mu_qj)))))/2 - Sum_zi_notzj(j, p, W_mat, Sigma_b_q, mu_b_q, ids, pz_q))
-
-        #uzj[j] <- digamma(0.5) - digamma(0.5) + as.numeric(1/sigma2)*(t(mu0[ids[[j]]])%*%t(W_j)%*%Y_std -t(mu0[ids[[j]]])%*%(t(W_mat[,ids[[j]]])%*%W_mat[,ids[[j]]])%*%mu0[ids[[j]]]/2 - t(mu0[ids[[2]]])%*%(t(W_mat[,ids[[2]]])%*%W_mat[,ids[[notj]]])%*%mu0[ids[[notj]]])
-      }
-      
-      for(j in 1:p){
-        pz_q[j] <- if(uzj[j] > 709){
-          1
-        } else{
-          exp(uzj[j])/sum(exp(uzj))
-        }
-      }
-      
-      
-    } else{
-      uzj <- c()
-      for(j in 1:p){
-        mu_qj <- mu_b_q[ids[[j]]]
-        W_j <- W_mat[,ids[[j]]]
-        Sigma_qj <- Sigma_b_q[ids[[j]], ids[[j]]]
-
-        uzj[j] <- digamma(a_q[j]) - digamma(b_q[j]) + as.numeric(E_inv_sigma2)*(t(mu_qj)%*%t(W_j)%*%Y - sum(diag((t(W_j)%*%W_j)%*%(Sigma_qj + mu_qj%*%t(mu_qj))))/2 - Sum_zi_notzj(j, p, W_mat, Sigma_b_q, mu_b_q, ids, pz_q))
+        # mu_qj <- mu_b_q[ids[[j]]]
+        # W_j <- W_mat[,ids[[j]]]
+        # Sigma_qj <- Sigma_b_q[ids[[j]], ids[[j]]]
+        # 
+        # uzj <- digamma(a_q[j]) - digamma(b_q[j]) + as.numeric(E_inv_sigma2)*(t(mu_qj)%*%t(W_j)%*%Y_std - (sum(diag((t(W_j)%*%W_j)%*%(Sigma_qj + mu_qj%*%t(mu_qj)))))/2 - Sum_zi_notzj(j, p, W_mat, Sigma_b_q, mu_b_q, ids, pz_q))
+        pz_r <- pz_q
+        uz_js <- rep(NA, p)
+        for(r in 0:1){
+          
+          pz_r[j] = r
+          uz_js[r+1] <- -(n/2)*(log(delta2_q) - digamma(delta1_q)) - 0.5*as.numeric(E_inv_sigma2)*E_quad_y(Y_std, pz_r, mu_b_q, W_mat, K, Sigma_b_q) + r*(digamma(a_q[j]) - digamma(a_q[j] + b_q[j])) + (1-r)*(digamma(b_q[j]) - digamma(a_q[j] + b_q[j]))
+        }  
         
-        #sum(diag(t(W_j)%*%W_j%*%Sigma_qj)) + t(mu_qj)%*%(t(W_j)%*%W_j)%*%mu_qj
-      }
-      
-      for(j in 1:p){
-        pz_q[j] <- if(uzj[j] > 709){
-          1
-        } else{
-          exp(uzj[j])/sum(exp(uzj))
+        if(sum(exp(uz_js)) == 0){
+          cat("sum pki = 0", "iter:", iter, "\n")
+          pz_q[j] <- c(0,1)[which.max(uz_js)]
+        } else if (sum(exp(uz_js)) == Inf) {
+          pz_q[j] <- c(0,1)[which.max(uz_js)]
+        } else {
+          pz_q[j] <- exp(uz_js[2])/sum(exp(uz_js))
+        }
+        
+        
+        #uzj[j] <- digamma(0.5) - digamma(0.5) + as.numeric(1/sigma2)*(t(mu0[ids[[j]]])%*%t(W_j)%*%Y_std -t(mu0[ids[[j]]])%*%(t(W_mat[,ids[[j]]])%*%W_mat[,ids[[j]]])%*%mu0[ids[[j]]]/2 - t(mu0[ids[[2]]])%*%(t(W_mat[,ids[[2]]])%*%W_mat[,ids[[notj]]])%*%mu0[ids[[notj]]])
+        
+      #   pz_q[j] <- if(uzj > 709){
+      #     1
+      #   } else{
+      #     exp(uzj)/(1 + exp(uzj))
+      #   }
+      # }
+      # 
+      # print(pz_q)
+        #print(exp(uz_js[2])/sum(exp(uz_js)))
+        #print(exp(uz_js[1])/sum(exp(uz_js)))
+     
+    }
+      }else{
+        for(j in 1:p){
+          # mu_qj <- mu_b_q[ids[[j]]]
+          # W_j <- W_mat[,ids[[j]]]
+          # Sigma_qj <- Sigma_b_q[ids[[j]], ids[[j]]]
+          # 
+          # uzj <- digamma(a_q[j]) - digamma(b_q[j]) + as.numeric(E_inv_sigma2)*(t(mu_qj)%*%t(W_j)%*%Y - (sum(diag((t(W_j)%*%W_j)%*%(Sigma_qj + mu_qj%*%t(mu_qj)))))/2 - Sum_zi_notzj(j, p, W_mat, Sigma_b_q, mu_b_q, ids, pz_q))
+          # print(uzj)
+          
+          pz_r <- pz_q
+          uz_js <- rep(NA, p)
+          for(r in 0:1){
+            
+            pz_r[j] = r
+            uz_js[r+1] <- -(n/2)*(log(delta2_q) - digamma(delta1_q)) - 0.5*as.numeric(E_inv_sigma2)*E_quad_y(Y, pz_r, mu_b_q, W_mat, K, Sigma_b_q) + r*(digamma(a_q[j]) - digamma(a_q[j] + b_q[j])) + (1-r)*(digamma(b_q[j]) - digamma(a_q[j] + b_q[j]))
+          }   
+          
+          if(sum(exp(uz_js)) == 0){
+            cat("sum pki = 0", "iter:", iter, "\n")
+            pz_q[j] <- c(0,1)[which.max(uz_js)]
+          } else if (sum(exp(uz_js)) == Inf) {
+            pz_q[j] <- c(0,1)[which.max(uz_js)]
+          } else {
+            pz_q[j] <- exp(uz_js[2])/sum(exp(uz_js))
+          }
+          
+          
+          
+          #uzj[j] <- digamma(0.5) - digamma(0.5) + as.numeric(1/sigma2)*(t(mu0[ids[[j]]])%*%t(W_j)%*%Y_std -t(mu0[ids[[j]]])%*%(t(W_mat[,ids[[j]]])%*%W_mat[,ids[[j]]])%*%mu0[ids[[j]]]/2 - t(mu0[ids[[2]]])%*%(t(W_mat[,ids[[2]]])%*%W_mat[,ids[[notj]]])%*%mu0[ids[[notj]]])
+          
+          # pz_q[j] <- if(uzj > 709){
+          #   1
+          # } else{
+          #   exp(uzj)/(1 + exp(uzj))
+          # }
         }
       }
-    }
+      
 
     #print(pz_q)
     
@@ -401,37 +436,37 @@ sim_oracle <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt, beta, B, time
     converged <- check_convergence(elbo_c, elbo_prev, convergence_threshold)
 
     elbo_prev <- elbo_c
-    #print(elbo_c)
-    #print(iter)
+    print(elbo_c)
+    print(iter)
     
   }  
   
   runtime_VB <- proc.time() - start
   
-  # if(std == TRUE){
-  #   for(j in 1:p){
-  #     plot(time_points, beta[,,j], ylab = paste0('beta',j), xlab = expression(t), type = 'l', col = 'red')
-  #     lines(time_points, beta_hat[,,j]/sd_t[,,j], col = "blue")
-  #   }
-  # 
-  #   Z_hat <- ifelse(pz_q > 0.5, 1, 0)
-  #   yhat_std <- rowSums(sapply(1:p, function(j){Z_hat[j]*(W_mat[,ids[[j]]]%*%mu_b_q_res[,,j])}))
-  #   y_hat <- yhat_std + mean(Y)
-  # 
-  #   plot(Y, y_hat)
-  #   abline(0,1)
-  # } else{
-  #   for(j in 1:p){
-  #     plot(time_points, beta[,,j], ylab = paste0('beta',j), xlab = expression(t), type = 'l', col = 'red')
-  #     lines(time_points, beta_hat[,,j], col = "blue")
-  #   }
-  # 
-  #   Z_hat <- ifelse(pz_q > 0.5, 1, 0)
-  #   y_hat <- rowSums(sapply(1:p, function(j){Z_hat[j]*(W_mat[,ids[[j]]]%*%mu_b_q_res[,,j])}))
-  #   plot(Y, y_hat)
-  #   abline(0,1)
-  # 
-  # }
+  if(std == TRUE){
+    for(j in 1:p){
+      plot(time_points, beta[,,j], ylab = paste0('beta',j), xlab = expression(t), type = 'l', col = 'red')
+      lines(time_points, beta_hat[,,j]/sd_t[,,j], col = "blue")
+    }
+
+    Z_hat <- ifelse(pz_q > 0.5, 1, 0)
+    yhat_std <- rowSums(sapply(1:p, function(j){Z_hat[j]*(W_mat[,ids[[j]]]%*%mu_b_q_res[,,j])}))
+    y_hat <- yhat_std + mean(Y)
+
+    plot(Y, y_hat)
+    abline(0,1)
+  } else{
+    for(j in 1:p){
+      plot(time_points, beta[,,j], ylab = paste0('beta',j), xlab = expression(t), type = 'l', col = 'red')
+      lines(time_points, beta_hat[,,j], col = "blue")
+    }
+
+    Z_hat <- ifelse(pz_q > 0.5, 1, 0)
+    y_hat <- rowSums(sapply(1:p, function(j){Z_hat[j]*(W_mat[,ids[[j]]]%*%mu_b_q_res[,,j])}))
+    plot(Y, y_hat)
+    abline(0,1)
+
+  }
   
   res <- list(mu_b = mu_b_q, Sigma_b = Sigma_b_q, delta1 = delta1_q, delta2 = delta2_q, a = a_q, b = b_q, pz = pz_q, E_lambda2, N_iter = iter, runtime = runtime_VB[[3]], elbo = elbo_c)
   
@@ -444,14 +479,14 @@ sim_oracle <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt, beta, B, time
 res <- sim_oracle(1234,1,300,0.0025, 'TESTE3', Z, p, K, nt, beta, B, time_points, std = TRUE)
 
 
-results <- lapply(1:50, function(i){sim_oracle(1234,i,100,0.1, 'TESTE4/sigma20.1', Z, p, K, nt, beta, B, time_points, std = TRUE)})
-save(results, file = 'TESTE4/sigma20.1/results.RData')
+results <- lapply(1:50, function(i){sim_oracle(1234,i,100,0.001, 'TESTE4', Z, p, K, nt, beta, B, time_points, std = TRUE)})
+save(results, file = 'TESTE4/results.RData')
 
 
 ids <- split(1:(K*p), rep(1:p, each = K))
 #cases = c('Oracle/n25_sigma20.01','Oracle/n100_sigma20.01','Oracle/n300_sigma20.01')
 
-case <- 'TESTE4/sigma20.01'
+case <- 'TESTE4'
 
 for(case in cases){
   
@@ -523,7 +558,7 @@ for(case in cases){
       lines(time_points, beta_hat_all[s,,j], col = "gray")
     }
     lines(time_points, beta_hat[,,j], col = "blue")
-    lines(time_points, B[[j]]%*%mu0[ids[[j]]], col = "purple")
+    #lines(time_points, B[[j]]%*%mu0[ids[[j]]], col = "purple")
     lines(time_points, beta[,,j], col = 'red', lty = 2)
     #legend("topleft", c('True', 'Estimated'), col = c("red", "blue"), lty = c(2,1))
   }
