@@ -204,19 +204,17 @@ sim_oracle <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt, beta, B, time
   set.seed(seed)
   Y <- g_ui + rnorm(n, mean = 0, sd = sqrt(sigma2))
   
-  boxplot(g_ui)
+  #boxplot(g_ui)
   
   data <- list(Y = Y, beta = beta, Xt = X,  Xt_smooth = X_smooth, sigma2 = sigma2)
-  #save(data, file = paste0(folder,"/data_", nsim, ".RData"))
+  save(data, file = paste0(folder,"/data_", nsim, ".RData"))
   
   # Standardized predictors to fit model
   if(std == TRUE){
     data_std <- std_pred(data$Xt_smooth, Y, beta, K, nt, p, n)
-    #save(data_std, file = paste0(folder,"/datastd_", nsim, ".RData"))
+    save(data_std, file = paste0(folder,"/datastd_", nsim, ".RData"))
     
-   
-    
-    # Run VB for each simulated dataset
+    # Quantities required to run VB
     Xt_std <- data_std$Xt_std
     Y_std <- data_std$Y_std
     W_mat <- data_std$W_mat
@@ -436,37 +434,37 @@ sim_oracle <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt, beta, B, time
     converged <- check_convergence(elbo_c, elbo_prev, convergence_threshold)
 
     elbo_prev <- elbo_c
-    print(elbo_c)
-    print(iter)
+    #print(elbo_c)
+    #print(iter)
     
   }  
   
   runtime_VB <- proc.time() - start
   
-  if(std == TRUE){
-    for(j in 1:p){
-      plot(time_points, beta[,,j], ylab = paste0('beta',j), xlab = expression(t), type = 'l', col = 'red')
-      lines(time_points, beta_hat[,,j]/sd_t[,,j], col = "blue")
-    }
-
-    Z_hat <- ifelse(pz_q > 0.5, 1, 0)
-    yhat_std <- rowSums(sapply(1:p, function(j){Z_hat[j]*(W_mat[,ids[[j]]]%*%mu_b_q_res[,,j])}))
-    y_hat <- yhat_std + mean(Y)
-
-    plot(Y, y_hat)
-    abline(0,1)
-  } else{
-    for(j in 1:p){
-      plot(time_points, beta[,,j], ylab = paste0('beta',j), xlab = expression(t), type = 'l', col = 'red')
-      lines(time_points, beta_hat[,,j], col = "blue")
-    }
-
-    Z_hat <- ifelse(pz_q > 0.5, 1, 0)
-    y_hat <- rowSums(sapply(1:p, function(j){Z_hat[j]*(W_mat[,ids[[j]]]%*%mu_b_q_res[,,j])}))
-    plot(Y, y_hat)
-    abline(0,1)
-
-  }
+  # if(std == TRUE){
+  #   for(j in 1:p){
+  #     plot(time_points, beta[,,j], ylab = paste0('beta',j), xlab = expression(t), type = 'l', col = 'red')
+  #     lines(time_points, beta_hat[,,j]/sd_t[,,j], col = "blue")
+  #   }
+  # 
+  #   Z_hat <- ifelse(pz_q > 0.5, 1, 0)
+  #   yhat_std <- rowSums(sapply(1:p, function(j){Z_hat[j]*(W_mat[,ids[[j]]]%*%mu_b_q_res[,,j])}))
+  #   y_hat <- yhat_std + mean(Y)
+  # 
+  #   plot(Y, y_hat)
+  #   abline(0,1)
+  # } else{
+  #   for(j in 1:p){
+  #     plot(time_points, beta[,,j], ylab = paste0('beta',j), xlab = expression(t), type = 'l', col = 'red')
+  #     lines(time_points, beta_hat[,,j], col = "blue")
+  #   }
+  # 
+  #   Z_hat <- ifelse(pz_q > 0.5, 1, 0)
+  #   y_hat <- rowSums(sapply(1:p, function(j){Z_hat[j]*(W_mat[,ids[[j]]]%*%mu_b_q_res[,,j])}))
+  #   plot(Y, y_hat)
+  #   abline(0,1)
+  # 
+  # }
   
   res <- list(mu_b = mu_b_q, Sigma_b = Sigma_b_q, delta1 = delta1_q, delta2 = delta2_q, a = a_q, b = b_q, pz = pz_q, E_lambda2, N_iter = iter, runtime = runtime_VB[[3]], elbo = elbo_c)
   
@@ -479,7 +477,7 @@ sim_oracle <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt, beta, B, time
 res <- sim_oracle(1234,1,300,0.0025, 'TESTE3', Z, p, K, nt, beta, B, time_points, std = TRUE)
 
 
-results <- lapply(1:50, function(i){sim_oracle(1234,i,100,0.001, 'TESTE4', Z, p, K, nt, beta, B, time_points, std = TRUE)})
+results <- lapply(1:100, function(i){sim_oracle(1234,i,300,0.0025, 'TESTE4', Z, p, K, nt, beta, B, time_points, std = TRUE)})
 save(results, file = 'TESTE4/results.RData')
 
 
@@ -511,7 +509,7 @@ for(case in cases){
   
   
   # results for selection
-  nsim = 50
+  nsim = 100
   res_b <- matrix(do.call(rbind, lapply(results, `[[`, 1)), ncol = K*p, byrow = TRUE)
   res_pz <- do.call(rbind, lapply(results, `[[`, 7))
   res_lambda2 <- do.call(rbind,lapply(results, `[[`, 8))
