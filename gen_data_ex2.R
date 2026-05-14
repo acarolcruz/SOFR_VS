@@ -1,54 +1,36 @@
-gen_data_vs <- function(seed, p, n, nt, K, Z, sigma2, gamma = 0, ordem){
-  time_points <- cbind(seq(0, 1, length.out = nt), seq(0, pi/3, length.out = nt),
-                       seq(-1, 1, length.out = nt), seq(0, pi/3, length.out = nt),
-                       seq(-2, 1, length.out = nt), seq(-1, 1, length.out = nt))
+gen_x <- function(seed, p, nt, time_points){
+  set.seed(seed + p)
+  # number of basis used in paper 2025 = 50
+  ui <- sapply(1:10, function(k){rnorm(1, 0, k^(-2))}) # morris also used this one in of his papers
+  phi <- cbind(rep(1,nt), sapply(2:10, function(k){sqrt(2)*cos(k*pi*time_points)}))
   
-  set.seed(seed)
-  a1 <- rnorm(n, -4, 3)
-  a2 <- rnorm(n, 7, 1.5)
-  b1 <- runif(n, 3, 7)
-  b2 <- rnorm(n, 0, 1)
-  c1 <- rnorm(n, -3, 1.2)
-  c2 <- rnorm(n, 2, 0.5)
-  c3 <- rnorm(n, -2, 1)
-  d1 <- rnorm(n, -2, 1)
-  d2 <- rnorm(n, 3, 1.5)
-  e1 <- runif(n, 2, 7)
-  e2 <- rnorm(n, 2, 0.4)
-  f1 <- rnorm(n, 4, 2)
-  f2 <- rnorm(n, -3, 0.5)
-  f3 <- rnorm(n, 1, 1)
-  
-  X1 <- t(sapply(1:n, function(i){cos(2*pi*(time_points[,1] - a1[i])) + a2[i]}))
-  X2 <- t(sapply(1:n, function(i){b1[i]*sin(pi*time_points[,2]) + b2[i]}))
-  X3 <- t(sapply(1:n, function(i){c1[i]*time_points[,3]^3 + c2[i]*time_points[,3]^2 + c3[i]*time_points[,3]}))
-  X4 <- t(sapply(1:n, function(i){sin(2*(time_points[,4] - d1[i])) + d2[i]*time_points[,4]}))
-  X5 <- t(sapply(1:n, function(i){e1[i]*cos(2*time_points[,5]) + e2[i]*time_points[,5]}))
-  X6 <- t(sapply(1:n, function(i){f1[i]*exp(-time_points[,6]/3) + f2[i]*time_points[,6] + f3[i]}))
-  
-  beta1 <- sin(time_points[,1])
-  beta2 <- sin(2*time_points[,2])
-  beta3 <- -gamma*time_points[,3]^2
-  beta4 <- sin(2*time_points[,4])
-  beta5 <- gamma*sin(pi*time_points[,5])
-  beta6 <- rep(0, nt)
-  
-  
+  X <- 5*rowSums(sapply(1:10, function(k){ui[k]*phi[,k]}))
+  return(X)
+}
+
+gen_data_ex2 <- function(seed, n, nt, p, ordem, K, Z, sigma2){
+  time_points <- matrix(rep(seq(0, 1, length.out = nt), p), ncol = p, nrow = nt)
   
   Xt <- array(NA, c(n, nt, p))
-  Xt[,,1] <- X1
-  Xt[,,2] <- X2
-  Xt[,,3] <- X3
-  Xt[,,4] <- X4
-  Xt[,,5] <- X5
-  Xt[,,6] <- X6
+  Xt[,,1] <- t(sapply(1:n, function(n){gen_x(seed + n, 1, nt, time_points[,1])}))
+  Xt[,,2] <- t(sapply(1:n, function(n){gen_x(seed + n, 2, nt, time_points[,2])}))
+  Xt[,,3] <- t(sapply(1:n, function(n){gen_x(seed + n, 3, nt, time_points[,3])}))
+  Xt[,,4] <- t(sapply(1:n, function(n){gen_x(seed + n, 4, nt, time_points[,4])}))
+  
+  beta <- array(NA, c(nt, 1, p))
+  beta1 <- 2*sin(pi*time_points[,1])# 2*sin(pi*2*time_points[,1])
+  beta2 = beta4 = rep(0, nt)
+  beta3 <- 1.25*sin(pi*3*time_points[,3]) #2*cos(pi*2*time_points[,1])
   
   # plot(time_points[,1], Xt[1,,1], type = "l");for(i in 2:n){lines(time_points[,1], Xt[i,,1], col = "grey")}
   # plot(time_points[,2], Xt[1,,2], type = "l");for(i in 2:n){lines(time_points[,2], Xt[i,,2], col = "grey")}
-  # plot(time_points[,3], Xt[1,,3], type = "l");for(i in 2:n){lines(time_points[,3], Xt[i,,3], col = "grey")} 
+  # plot(time_points[,3], Xt[1,,3], type = "l");for(i in 2:n){lines(time_points[,3], Xt[i,,3], col = "grey")}
   # plot(time_points[,4], Xt[1,,4], type = "l");for(i in 2:n){lines(time_points[,4], Xt[i,,4], col = "grey")}
-  # plot(time_points[,5], Xt[1,,5], type = "l");for(i in 2:n){lines(time_points[,5], Xt[i,,5], col = "grey")}
-  # plot(time_points[,6], Xt[1,,6], type = "l");for(i in 2:n){lines(time_points[,6], Xt[i,,6], col = "grey")}
+  
+  
+  # plot(time_points[,1], beta1, type = "l")
+  # plot(time_points[,3], beta3, type = "l")
+  
   
   # Expand X(t)
   X_smooth <- array(NA, dim = c(n, nt, p))
@@ -77,6 +59,11 @@ gen_data_vs <- function(seed, p, n, nt, K, Z, sigma2, gamma = 0, ordem){
     resp <- c()
   }
   
+  # plot(time_points[,1], X_smooth[1,,1], type = "l");for(i in 2:n){lines(time_points[,1], X_smooth[i,,1], col = "grey")}
+  # plot(time_points[,2], X_smooth[1,,2], type = "l");for(i in 2:n){lines(time_points[,2], X_smooth[i,,2], col = "grey")}
+  # plot(time_points[,3], X_smooth[1,,3], type = "l");for(i in 2:n){lines(time_points[,3], X_smooth[i,,3], col = "grey")}
+  # plot(time_points[,4], X_smooth[1,,4], type = "l");for(i in 2:n){lines(time_points[,4], X_smooth[i,,4], col = "grey")}
+  
   
   ids <- split(1:(K*p), rep(1:p, each = K))
   
@@ -86,8 +73,6 @@ gen_data_vs <- function(seed, p, n, nt, K, Z, sigma2, gamma = 0, ordem){
   beta[,,2] <- beta2
   beta[,,3] <- beta3
   beta[,,4] <- beta4
-  beta[,,5] <- beta5
-  beta[,,6] <- beta6
   #plot(time_points, beta[,,1])
   
   # for(j in c(1,2,4)){
@@ -101,7 +86,7 @@ gen_data_vs <- function(seed, p, n, nt, K, Z, sigma2, gamma = 0, ordem){
   g_ui = sapply(1:n, function(i){sum(sapply(1:p, function(j){trapz(time_points[,j], (X_smooth[i,,j]*(Z[j]*beta[,,j])))}))})
   
   set.seed(seed)
-  Y <- g_ui + rnorm(n, mean = 0, sd = sqrt(sigma2))
+  Y <- 20 + g_ui + rnorm(n, mean = 0, sd = sqrt(sigma2))
   
   # std the smoothed X
   data_std <- std_pred_fun(X_smooth, Y, beta, K, nt, p, n, time_points = time_points, ordem = ordem)
@@ -110,3 +95,7 @@ gen_data_vs <- function(seed, p, n, nt, K, Z, sigma2, gamma = 0, ordem){
               W_mat = data_std$W_mat, Y_std = data_std$Y_std, beta_std = data_std$beta_std, 
               Xbar_t = data_std$Xbar_t, sd_t = data_std$sd_t))
 }  
+
+
+
+

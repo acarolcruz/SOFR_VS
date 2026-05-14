@@ -337,11 +337,11 @@ sim_oracle <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt, beta, B, time
     #for each j = 1, ..., p
     if(std == TRUE){
       for(j in 1:p){
-        # mu_qj <- mu_b_q[ids[[j]]]
-        # W_j <- W_mat[,ids[[j]]]
-        # Sigma_qj <- Sigma_b_q[ids[[j]], ids[[j]]]
-        # 
-        # uzj <- digamma(a_q[j]) - digamma(b_q[j]) + as.numeric(E_inv_sigma2)*(t(mu_qj)%*%t(W_j)%*%Y_std - (sum(diag((t(W_j)%*%W_j)%*%(Sigma_qj + mu_qj%*%t(mu_qj)))))/2 - Sum_zi_notzj(j, p, W_mat, Sigma_b_q, mu_b_q, ids, pz_q))
+        mu_qj <- mu_b_q[ids[[j]]]
+        W_j <- W_mat[,ids[[j]]]
+        Sigma_qj <- Sigma_b_q[ids[[j]], ids[[j]]]
+
+        uzj <- digamma(a_q[j]) - digamma(b_q[j]) + as.numeric(E_inv_sigma2)*(t(mu_qj)%*%t(W_j)%*%Y_std - (sum(diag((t(W_j)%*%W_j)%*%(Sigma_qj + mu_qj%*%t(mu_qj)))))/2 - Sum_zi_notzj(j, p, W_mat, Sigma_b_q, mu_b_q, ids, pz_q))
         pz_r <- pz_q
         uz_js <- rep(NA, p)
         for(r in 0:1){
@@ -376,11 +376,11 @@ sim_oracle <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt, beta, B, time
     }
       }else{
         for(j in 1:p){
-          # mu_qj <- mu_b_q[ids[[j]]]
-          # W_j <- W_mat[,ids[[j]]]
-          # Sigma_qj <- Sigma_b_q[ids[[j]], ids[[j]]]
-          # 
-          # uzj <- digamma(a_q[j]) - digamma(b_q[j]) + as.numeric(E_inv_sigma2)*(t(mu_qj)%*%t(W_j)%*%Y - (sum(diag((t(W_j)%*%W_j)%*%(Sigma_qj + mu_qj%*%t(mu_qj)))))/2 - Sum_zi_notzj(j, p, W_mat, Sigma_b_q, mu_b_q, ids, pz_q))
+          mu_qj <- mu_b_q[ids[[j]]]
+          W_j <- W_mat[,ids[[j]]]
+          Sigma_qj <- Sigma_b_q[ids[[j]], ids[[j]]]
+
+          uzj <- digamma(a_q[j]) - digamma(b_q[j]) + as.numeric(E_inv_sigma2)*(t(mu_qj)%*%t(W_j)%*%Y - (sum(diag((t(W_j)%*%W_j)%*%(Sigma_qj + mu_qj%*%t(mu_qj)))))/2 - Sum_zi_notzj(j, p, W_mat, Sigma_b_q, mu_b_q, ids, pz_q))
           # print(uzj)
           
           pz_r <- pz_q

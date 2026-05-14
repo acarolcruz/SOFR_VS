@@ -59,10 +59,10 @@ while(iter < 100){
   E_inv_sigma2 <- delta1_q/delta2_q
   if(E_inv_sigma2 < 0){stop('variance cannot be negative!')}
   
-  Q <- as.numeric(E_inv_sigma2)*(t(W_mat)%*%W_mat + diag(E_eta))
+  Q <- (t(W_mat)%*%W_mat + diag(E_eta))
   if(is.singular.matrix(Q)){warning()}
-  Sigma_b_q <- solve(Q)
-  mu_b_q <- Sigma_b_q%*%(as.numeric(E_inv_sigma2)*(t(W_mat)%*%Y))
+  Sigma_b_q <- solve(as.numeric(E_inv_sigma2)*Q)
+  mu_b_q <- solve(Q)%*%(t(W_mat)%*%Y)
   
   mu_b_q_res <- array(mu_b_q, c(K, 1, p))
   beta_hat <- array(NA, c(nt, 1, p))
@@ -144,10 +144,10 @@ while(iter < 100){
   E_inv_sigma2 <- delta1_q/delta2_q
   if(E_inv_sigma2 < 0){stop('variance cannot be negative!')}
   
-  Q <- (as.numeric(E_inv_sigma2)*(t(W_mat)%*%W_mat) + diag(E_eta))
+  Q <- (t(W_mat)%*%W_mat) + diag(E_eta))
   if(is.singular.matrix(Q)){warning()}
-  Sigma_b_q <- solve(Q)
-  mu_b_q <- Sigma_b_q%*%(as.numeric(E_inv_sigma2)*(t(W_mat)%*%Y))
+  Sigma_b_q <- solve(as.numeric(E_inv_sigma2)*Q)
+  mu_b_q <- solve(Q)%*%(t(W_mat)%*%Y)
   
   mu_b_q_res <- array(mu_b_q, c(K, 1, p))
   beta_hat <- array(NA, c(nt, 1, p))

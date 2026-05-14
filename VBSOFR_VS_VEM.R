@@ -1,4 +1,4 @@
-#' Variational Bayes for variable selection in scalar-on-function regression (SOFR) with only functional predictors
+#' Variational EM for variable selection in scalar-on-function regression (SOFR) with only functional predictors
 #'
 #' @param delta1_0 
 #' @param delta2_0 
@@ -20,9 +20,8 @@
 #' @export
 #'
 #' @examples
-VBSOFR_VS <- function(delta1_0, delta2_0, a0, b0,
-                      shape_lambda_0, rate_0, initial_values, data, 
-                      data_std, n, K, p, 
+VBSOFR_VS_VEM <- function(delta1_0, delta2_0, a0, b0, initial_values, 
+                      data, data_std, n, K, p, 
                       Niter, convergence_threshold, std){
   
   ids <- split(1:(K*p), rep(1:p, each = K))
@@ -37,16 +36,15 @@ VBSOFR_VS <- function(delta1_0, delta2_0, a0, b0,
   
   # Update VB parambers not updated within VB
   delta1_q <- n/2 + delta1_0 + (K*p)/2
-  shape_lambda_q <- rep(K + shape_lambda_0, p)
   
   #Initial values
-  E_lambda2 <- initial_values$E_lambda2
- 
+  lambda2 <- initial_values$lambda2
+  
   E_inv_sigma2 <- initial_values$E_inv_sigma2 #delta1_q/delta2_q#
   delta2_q <- 1/E_inv_sigma2 #(delta1_q - 1)*var(Y)
   
   E_eta <- initial_values$E_eta
-
+  
   pz_q <- initial_values$pz
   
   # Structure
@@ -59,7 +57,7 @@ VBSOFR_VS <- function(delta1_0, delta2_0, a0, b0,
   converged <- FALSE
   start <- proc.time()
   while(iter < Niter & converged == FALSE){
-  #while(iter < Niter){
+    #while(iter < Niter){
     
     # Step 1: Update variational of b
     pz_long <- rep(pz_q, each = K)
@@ -89,20 +87,16 @@ VBSOFR_VS <- function(delta1_0, delta2_0, a0, b0,
     # Step 3: Update variational of tau2
     chi_q <- c((diag(Sigma_b_q) + mu_b_q^2)*as.numeric(E_inv_sigma2))
     for(j in 1:p){
-      psi_q[ids[[j]]] <- rep(E_lambda2[j], K)
+      psi_q[ids[[j]]] <- rep(lambda2[j], K)
     }
     for(kj in 1:(K*p)){
       E_eta[kj] <- Egig(lambda = 0.5, chi = chi_q[kj], psi = psi_q[kj], func = "1/x")
       E_tau2[kj] <- Egig(lambda = 0.5, chi = chi_q[kj], psi = psi_q[kj], fun = "x")
     }
-    #Step 3.1 update variational for lambda2
-    for(j in 1:p){
-      rate_q[j] <- rate_0 + 0.5*sum(E_tau2[ids[[j]]])
-      E_lambda2[j] <- shape_lambda_q[j]/rate_q[j]
-    }
+    
     # Step 4: Update variational of theta
     a_q <- pz_q + a0
-    b_q <- 1 - pz_q + b0#2 - pz_q - b0
+    b_q <- 1 - pz_q + b0#2 - pz_q - b0 same for b0 = 0.5
     
     #Step 5: Update variational of Z
     #for each j = 1, ..., p
@@ -125,20 +119,6 @@ VBSOFR_VS <- function(delta1_0, delta2_0, a0, b0,
     }else{
       for(j in 1:p){
         
-        # truth --- the other way of computing 
-        # W_j <- W_mat[,ids[[j]]]
-        # W_notj <- W_mat[,-ids[[j]]]
-        # pz_notj <- pz_q[-j]
-        # 
-        # uzj <- digamma(a_q[j]) - digamma(b_q[j]) + as.numeric(1/sigma2)*(t(c(b1,b2)[ids[[j]]])%*%t(W_j)%*%Y) -as.numeric(1/sigma2)*(t(c(b1,b2)[ids[[j]]])%*%t(W_j)%*%W_notj%*%diag(rep(pz_notj, each = K))%*%c(b1,b2)[-ids[[j]]]) -0.5*as.numeric(1/sigma2)*(t(c(b1,b2)[ids[[j]]])%*%t(W_j)%*%W_j%*%c(b1,b2)[ids[[j]]])
-        # 
-        # if(exp(uzj) == Inf){
-        #   pz_q[j] <- 1
-        # } else {
-        #   pz_q[j] <- exp(uzj)/(1+exp(uzj))
-        # }
-        # 
-
         pz_r <- pz_q
         uz_js <- rep(NA, p)
         for(r in 0:1){
@@ -147,8 +127,6 @@ VBSOFR_VS <- function(delta1_0, delta2_0, a0, b0,
           
           uz_js[r+1] <- -(n/2)*(log(delta2_q) - digamma(delta1_q)) -0.5*as.numeric(E_inv_sigma2)*E_quad_y(Y, pz_r, mu_b_q, W_mat, K, Sigma_b_q) + r*(digamma(a_q[j]) - digamma(a_q[j] + b_q[j])) + (1-r)*(digamma(b_q[j]) - digamma(a_q[j] + b_q[j]))
           
-          # truth in oracle simulation
-          #uz_js[r+1] <- -0.5*as.numeric(1/sigma2)*(t(Y - W_mat%*%diag(rep(pz_r, each = K))%*%c(b1,b2))%*%(Y - W_mat%*%diag(rep(pz_r, each = K))%*%c(b1,b2))) + r*(digamma(a_q[j]) - digamma(a_q[j] + b_q[j])) + (1-r)*(digamma(b_q[j]) - digamma(a_q[j] + b_q[j]))
         }   
         
         if(sum(exp(uz_js)) == 0){
@@ -160,31 +138,34 @@ VBSOFR_VS <- function(delta1_0, delta2_0, a0, b0,
         }
       }
     }
-    # mu_b_q_res <- array(mu_b_q, c(K, 1, p))
-    # beta_hat <- array(NA, c(nt, 1, p))
-    # for(j in 1:p){
-    #   beta_hat[,,j] <- B[[j]]%*%mu_b_q_res[,,j]
+    
+    # if(std){
+    #   lambda2_c <- tryCatch(optim(lambda2, fn = elbo_lambda2, gr = dev_elbo, Y = Y_std, K = K, p_var = p, W = W_mat, delta1_q = delta1_q, delta2_q = delta2_q, Sigma_b_q = Sigma_b_q, mu_b_q = mu_b_q, pz = pz_q, a_q = a_q, b_q = b_q, chi_q = chi_q, psi_q = psi_q, delta2_0 = delta2_0, delta1_0 = delta1_0, a0 = a0, b0 = b0, control = list(fnscale = -1), method = 'L-BFGS-B', lower = rep(1e-10, p), upper = rep(1e10, p))$par)
+    # } else{
+    #   lambda2_c <- tryCatch(optim(lambda2, fn = elbo_lambda2, gr = dev_elbo, Y = Y, K = K, p_var = p, W = W_mat, delta1_q = delta1_q, delta2_q = delta2_q, Sigma_b_q = Sigma_b_q, mu_b_q = mu_b_q, pz = pz_q, a_q = a_q, b_q = b_q, chi_q = chi_q, psi_q = psi_q, delta2_0 = delta2_0, delta1_0 = delta1_0, a0 = a0, b0 = b0, control = list(fnscale = -1), method = 'L-BFGS-B', lower = rep(1e-10, p), upper = rep(1e10, p))$par)
     # }
+    # lambda2 <- lambda2_c
+    #print(lambda2)
+    
+    lambda2 <- lambda2_hat(K = K, p_var = p, q = q,
+                           chi_q = chi_q, psi_q = psi_q)
+    
     
     iter = iter + 1 
     if(std){
-      elbo_c <- elbo(Y_std, K, p, W_mat, delta1_q, delta2_q, Sigma_b_q, mu_b_q, pz_q, a_q, b_q, chi_q, psi_q, delta2_0, delta1_0, shape_lambda_0, shape_lambda_q, rate_0, rate_q, a0, b0)
-      #fix lambda2j
-      #elbo_c <- elbo(Y_std, K, p, W_mat, delta1_q, delta2_q, Sigma_b_q, mu_b_q, pz_q, a_q, b_q, chi_q, psi_q, delta2_0, delta1_0, E_lambda2, a0, b0)
+      elbo_c <- elbo(Y_std, K, p, W_mat, delta1_q, delta2_q, Sigma_b_q, mu_b_q, pz_q, a_q, b_q, chi_q, psi_q, delta2_0, delta1_0, a0, b0, lambda2)
     } else{
-      elbo_c <- elbo(Y, K, p, W_mat, delta1_q, delta2_q, Sigma_b_q, mu_b_q, pz_q, a_q, b_q, chi_q, psi_q, delta2_0, delta1_0, shape_lambda_0, shape_lambda_q, rate_0, rate_q, a0, b0)
-      #fix lambda2j
-      #elbo_c <- elbo(Y, K, p, W_mat, delta1_q, delta2_q, Sigma_b_q, mu_b_q, pz_q, a_q, b_q, chi_q, psi_q, delta2_0, delta1_0, E_lambda2, a0, b0)
+      elbo_c <- elbo(Y, K, p, W_mat, delta1_q, delta2_q, Sigma_b_q, mu_b_q, pz_q, a_q, b_q, chi_q, psi_q, delta2_0, delta1_0, a0, b0, lambda2)
     }
-
+    
     converged <- check_convergence(elbo_c, elbo_prev, convergence_threshold)
-
+    
     elbo_prev <- elbo_c
     #print(elbo_c)
   }
   runtime_VB <- proc.time() - start
   
-  res <- list(mu_b = mu_b_q, Sigma_b = Sigma_b_q, delta1 = delta1_q, delta2 = delta2_q, chi_q = chi_q, psi_q = psi_q, a = a_q, b = b_q, pz = pz_q, lambda2 = E_lambda2, N_iter = iter, runtime = runtime_VB[[3]], elbo = elbo_c)
+  res <- list(mu_b = mu_b_q, Sigma_b = Sigma_b_q, delta1 = delta1_q, delta2 = delta2_q, chi_q = chi_q, psi_q = psi_q, a = a_q, b = b_q, pz = pz_q, lambda2 = lambda2, N_iter = iter, runtime = runtime_VB[[3]], elbo = elbo_c)
   
   return(res)
 }

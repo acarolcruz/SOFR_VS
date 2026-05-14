@@ -1,4 +1,4 @@
-# Elbo calculation with lamba2j and prior on lambda2j
+# Elbo calculation with lamba2j fixed
 
 E_log_like <- function(Y, K, p, W, delta1_q, delta2_q, Sigma_b_q, mu_b_q, pz){
   n <- length(Y)
@@ -7,7 +7,7 @@ E_log_like <- function(Y, K, p, W, delta1_q, delta2_q, Sigma_b_q, mu_b_q, pz){
   
   pz_long <- rep(pz, each = K)
   Omega <- pz_long%*%t(pz_long) + diag(pz_long)%*%(diag(1, K*p) - diag(pz_long))
-
+  
   # approx  digamma(delta1_q)
   res <- -(n/2)*log(2*pi) -(n/2)*(log(delta2_q) -(log(delta1_q) - 1/(2*delta1_q))) - 0.5*E_inv_sigma2*(t(Y)%*%Y - 2*t(Y)%*%W%*%diag(pz_long)%*%mu_b_q + sum(diag(((Sigma_b_q + mu_b_q%*%t(mu_b_q))%*%((t(W)%*%W)*Omega)))))
   #cat("E_log_like_i:", res, "\n")
@@ -62,7 +62,7 @@ diff_b <- function(K, p, delta1_q, delta2_q, chi_q, psi_q, mu_b_q, Sigma_b_q){
 diff_sigma2 <- function(delta1_q, delta2_q, delta2_0, delta1_0){
   
   E_inv_sigma2 <- delta1_q/delta2_q
-
+  
   # original (all terms)
   #res <-  delta1_0*log(delta2_0) - delta1_q*log(delta2_q) - log(gamma(delta1_0)) + log(gamma(delta1_q)) + (delta1_q - delta1_0)*(log(delta2_q) - digamma(delta1_q)) + (delta2_q - delta2_0)*E_inv_sigma2
   
@@ -77,14 +77,13 @@ diff_sigma2 <- function(delta1_q, delta2_q, delta2_0, delta1_0){
   return(res)
 }
 
-diff_tau2 <- function(K, p, shape_lambda_q, rate_q, chi_q, psi_q){
+diff_tau2 <- function(K, p, lambda2, chi_q, psi_q){
   
   ids <- split(1:(K*p), rep(1:p, each = K))
   
   E_eta <- rep(NA, K*p)
   E_tau2 <- rep(NA, K*p)
-  E_lambda2 <- rep(NA, p)
-  E_log_lambda2 <- rep(NA, p)
+  log_lambda2 <- log(lambda2)
   E_log_tau2 <- rep(NA, K*p)
   
   for(kj in 1:(K*p)){
@@ -93,34 +92,14 @@ diff_tau2 <- function(K, p, shape_lambda_q, rate_q, chi_q, psi_q){
     E_log_tau2[kj] <- Egig(lambda = 0.5, chi = chi_q[kj], psi = psi_q[kj], fun = "logx")
   }  
   
-  for(j in 1:p){
-    E_lambda2[j] <- shape_lambda_q[j]/rate_q[j]
-    E_log_lambda2[j] <- digamma(shape_lambda_q[j]) - log(rate_q[j])
-  }
-
-  res <-  K*sum(E_log_lambda2) -0.5*sum(sapply(1:p, function(j){E_lambda2[j]*sum(E_tau2[ids[[j]]])})) - 
+  
+  res <-  K*sum(log_lambda2) -0.5*sum(sapply(1:p, function(j){lambda2[j]*sum(E_tau2[ids[[j]]])})) - 
     sum(sapply(1:(K*p), function(kj){0.25*(log(psi_q[kj]) - log(chi_q[kj]))-log(besselK(sqrt(chi_q[kj]*psi_q[kj]), 0.5))})) + 0.5*sum(E_log_tau2) + 0.5*sum(sapply(1:(K*p), function(kj){psi_q[kj]*E_tau2[kj] + chi_q[kj]*E_eta[kj]}))
-
+  
   #cat("E_log_tau2:", res, "\n")
   return(res)
 }
 
-diff_lambda2 <- function(p, shape_lambda_0, shape_lambda_q, rate_0, rate_q){
-  E_lambda2 <- rep(NA, p)
-  E_log_lambda2 <- rep(NA, p)
-  
-  for(j in 1:p){
-    E_lambda2[j] <- shape_lambda_q[j]/rate_q[j]
-    E_log_lambda2[j] <- digamma(shape_lambda_q[j]) - log(rate_q[j])
-  }
-  
-  res <- sum(sapply(1:p, function(j){shape_lambda_0*log(rate_0) - log(gamma(shape_lambda_0)) + 
-      (shape_lambda_0 - 1)*E_log_lambda2[j] -rate_0*E_lambda2[j] - shape_lambda_q[j]*log(rate_q[j]) + 
-      log(gamma(shape_lambda_q[j])) - (shape_lambda_q[j] - 1)*E_log_lambda2[j] + rate_q[j]*E_lambda2[j]}))
-  
-  #cat("E_log_lambda2:", res, "\n")
-  return(res)
-}
 
 
 diff_theta <- function(a_q, b_q, a0, b0){
@@ -132,11 +111,46 @@ diff_theta <- function(a_q, b_q, a0, b0){
 }
 
 
-elbo <- function(Y, K, p, W, delta1_q, delta2_q, Sigma_b_q, mu_b_q, pz, a_q, b_q, chi_q, psi_q, delta2_0, delta1_0, shape_lambda_0, shape_lambda_q, rate_0, rate_q, a0, b0){
+elbo_lambda2 <- function(lambda2, Y, K, p_var, W, delta1_q, delta2_q, Sigma_b_q, mu_b_q, pz, a_q, b_q, chi_q, psi_q, delta2_0, delta1_0, a0, b0){
   
-  res <- E_log_like(Y, K, p, W, delta1_q, delta2_q, Sigma_b_q, mu_b_q, pz) + diff_z(p, pz, a_q, b_q) + diff_theta(a_q, b_q, a0, b0) + diff_sigma2(delta1_q, delta2_q, delta2_0, delta1_0) + diff_b(K, p, delta1_q, delta2_q, chi_q, psi_q, mu_b_q, Sigma_b_q) + diff_tau2(K, p, shape_lambda_q, rate_q, chi_q, psi_q) # + diff_lambda2(p, shape_lambda_0, shape_lambda_q, rate_0, rate_q)
+  res <- E_log_like(Y, K, p_var, W, delta1_q, delta2_q, Sigma_b_q, mu_b_q, pz) + diff_z(p_var, pz, a_q, b_q) + diff_theta(a_q, b_q, a0, b0) + diff_sigma2(delta1_q, delta2_q, delta2_0, delta1_0) + diff_b(K, p_var, delta1_q, delta2_q, chi_q, psi_q, mu_b_q, Sigma_b_q) + diff_tau2(K, p_var, lambda2, chi_q, psi_q) 
+  return(as.numeric(res))
+}
+
+
+elbo <- function(Y, K, p, W, delta1_q, delta2_q, Sigma_b_q, mu_b_q, pz, a_q, b_q, chi_q, psi_q, delta2_0, delta1_0, a0, b0, lambda2){
+  
+  res <- E_log_like(Y, K, p, W, delta1_q, delta2_q, Sigma_b_q, mu_b_q, pz) + diff_z(p, pz, a_q, b_q) + diff_theta(a_q, b_q, a0, b0) + diff_sigma2(delta1_q, delta2_q, delta2_0, delta1_0) + diff_b(K, p, delta1_q, delta2_q, chi_q, psi_q, mu_b_q, Sigma_b_q) + diff_tau2(K, p, lambda2, chi_q, psi_q) 
   
   return(res)
 }
 
+# needs to have the same arguments as fr
+dev_elbo <- function(lambda2, Y, K, p_var, W, delta1_q, delta2_q, Sigma_b_q, mu_b_q, pz, a_q, b_q, chi_q, psi_q, delta2_0, delta1_0, a0, b0){
+  
+  ids <- split(1:(K*p_var), rep(1:p_var, each = K))
+  
+  E_tau2 <- rep(NA, K*p_var)
+  
+  for(kj in 1:(K*p_var)){
+    E_tau2[kj] <- Egig(lambda = 0.5, chi = chi_q[kj], psi = psi_q[kj], fun = "x")
+  }
+  
+  res <- sapply(1:p_var, function(j){K/lambda2[j] -0.5*sum(E_tau2[ids[[j]]])})
+  return(res)
+}
 
+
+lambda2_hat <- function(K, p_var, q, chi_q, psi_q){
+  
+  ids <- split(1:(K*p_var), rep(1:p_var, each = K))
+  
+  E_tau2 <- rep(NA, K*p_var)
+  
+  for(kj in 1:(K*p_var)){
+    E_tau2[kj] <- Egig(lambda = 0.5, chi = chi_q[kj], psi = psi_q[kj], fun = "x")
+  }
+  
+  lambda2_hat <- sapply(1:p_var, function(j){(2*K)/sum(E_tau2[ids[[j]]])})
+  return(lambda2_hat)
+}

@@ -80,8 +80,8 @@ sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
   delta2_0 <- 0.0001#0.0001 
   a0 <- 0.5 #change these values
   b0 <- 0.5
-  E_lambda2 <- rep(0.0001, p)#c(5000,100)
-  shape_lambda_0 <- 2#2 #1/3 #0.001 #stan recommend 2,0
+  E_lambda2 <- rep(1, p)#c(5000,100)
+  shape_lambda_0 <- 1/3#2 #1/3 #0.001 #stan recommend 2,0
   rate_0 <- 0.0001
   
   # Are not updated within VB
@@ -168,17 +168,25 @@ sim <- function(seed, nsim, n, sigma2, folder, Z, p, K, nt){
 
     # Step 5: Update variational of Z
     # for each j = 1, ..., p
-
     for(j in 1:p){
-      mu_qj <- mu_b_q[ids[[j]]]
-      W_j <- W_mat[,ids[[j]]]
-      Sigma_qj <- Sigma_b_q[ids[[j]], ids[[j]]]
+      # mu_qj <- mu_b_q[ids[[j]]]
+      # W_j <- W_mat[,ids[[j]]]
+      # Sigma_qj <- Sigma_b_q[ids[[j]], ids[[j]]]
+      # 
+      # uzj <- digamma(a_q[j]) - digamma(b_q[j]) +
+      #   as.numeric(E_inv_sigma2)*(t(mu_qj)%*%t(W_j)%*%Y_std - sum(diag(t(W_j)%*%W_j%*%Sigma_qj + as.vector(mu_qj%*%(t(W_j)%*%W_j))%*%t(mu_qj)))/2 - Sum_zi_notzj(j, p, W_mat, Sigma_b_q, mu_b_q, ids, pz_q))
 
-      uzj <- digamma(a_q[j]) - digamma(b_q[j]) +
-        as.numeric(E_inv_sigma2)*(t(mu_qj)%*%t(W_j)%*%Y_std -
-                        sum(diag(t(W_j)%*%W_j%*%Sigma_qj +
-                                   as.vector(mu_qj%*%(t(W_j)%*%W_j))%*%t(mu_qj)))/2 -
-        Sum_zi_notzj(j, p, W_mat, Sigma_b_q, mu_b_q, ids, pz_q))
+      mu_qj <- mu_b_q[ids[[j]]]
+      mu_q_notj <- mu_b_q[-ids[[j]]]
+      W_notj <- W_mat[,-ids[[j]]]
+      W_j <- W_mat[,ids[[j]]]
+      pz_notj <- pz_q[-j]
+
+      Sigma_qj <- Sigma_b_q[ids[[j]], ids[[j]]]
+      Sigma_notj_j <- Sigma_b_q[-ids[[j]], ids[[j]]]
+
+      uzj <- digamma(a_q[j]) - digamma(b_q[j]) + as.numeric(E_inv_sigma2)*(t(mu_qj)%*%t(W_j)%*%Y_std -
+                                  sum(diag(t(W_j)%*%W_notj%*%diag(rep(pz_notj, each = K))%*%(Sigma_notj_j + mu_q_notj%*%t(mu_qj))))) - 0.5*as.numeric(E_inv_sigma2)*(sum(diag((t(W_j)%*%W_j)%*%Sigma_qj)) + t(mu_qj)%*%(t(W_j)%*%W_j)%*%mu_qj)
 
       pz_q[j] <- if(uzj > 709){
         1

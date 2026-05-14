@@ -1,8 +1,7 @@
 # sim_oracle not to be in the R Package
-sim_oracle <- function(seed, nsim, initial_values, n, sigma2, folder, Z, p, K, 
+sim_oracle_VEM <- function(seed, nsim, initial_values, n, sigma2, folder, Z, p, K, 
                        nt, std = TRUE, ordem,
                        delta1_0 = 0.01, delta2_0 = 0.01, a0 = 0.5, b0 = 0.5,
-                       shape_lambda_0, rate_0,
                        Niter = 500, convergence_threshold = 0.001){
   
   ids <- split(1:(K*p), rep(1:p, each = K))
@@ -13,7 +12,7 @@ sim_oracle <- function(seed, nsim, initial_values, n, sigma2, folder, Z, p, K,
   #generate data
   # Generate Xs
   data <- gen_data_oracle(seed = seed, nsim = nsim, folder = folder, n = n, nt = nt, 
-                         Z = Z, K = K, p = p, sigma = sigma2)
+                          Z = Z, K = K, p = p, sigma = sigma2)
   
   # Standardized predictors to fit model
   if(std){
@@ -30,13 +29,14 @@ sim_oracle <- function(seed, nsim, initial_values, n, sigma2, folder, Z, p, K,
     # plot(time_points, Xt_std[1,,1], type = "l", ylim = c(-2,2));for(i in 2:n){lines(time_points, Xt_std[i,,1], col = "grey")}
     # plot(time_points, Xt_std[1,,2], type = "l", ylim = c(-2,2));for(i in 2:n){lines(time_points, Xt_std[i,,2], col = "grey")}
   }
-
-  vb_res <- VBSOFR_VS(initial_values = initial_values, data = data, 
-                      data_std = data_std, n = n, K = K, p = p, 
-                      delta1_0 = delta1_0, delta2_0 = delta2_0, a0 = a0, b0 = b0,
-                      shape_lambda_0 = shape_lambda_0, rate_0 = rate_0, 
-                      Niter = Niter, convergence_threshold = convergence_threshold,
-                      std = std)
+  
+  vb_res <- VBSOFR_VS_VEM(initial_values = initial_values, data = data,
+                          data_std = data_std, n = n, K = K, p = p, 
+                          delta1_0 = delta1_0, delta2_0 = delta2_0,
+                          a0 = a0, b0 = b0,
+                          Niter = Niter,
+                          convergence_threshold = convergence_threshold,
+                          std = std)
   
   
   # mu_b_q_res <- array(vb_res$mu_b, c(K, 1, p))

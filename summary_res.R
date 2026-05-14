@@ -2,9 +2,9 @@
 
 # aux function:
 rss <- function(i, data, results, std = TRUE){
-  W_mat <- data$W_mat
-  mu_b_q <- results[[i]][[1]]
-  pz_q <- results[[i]][[7]]
+  W_mat <- data_std$W_mat
+  mu_b_q <- results[[i]]$mu_b
+  pz_q <- results[[i]]$pz
   Z_hat <- ifelse(pz_q > 0.5, 1, 0)
   if(std == FALSE){
     yhat <- rowSums(sapply(1:p, function(j){Z_hat[j]*(W_mat[,ids[[j]]]%*%mu_b_q[ids[[j]]])}))
@@ -36,7 +36,7 @@ rss_std <- function(i, data, results){
 
 
 #folder <- 'Simulation SOFR VS STD'
-folder <- 'Simulation Ronaldo VS'
+folder <- 'Oracle'
 sub_folders <- list.dirs(folder)[-1]
 
 res <- c()
@@ -56,14 +56,15 @@ for(case in sub_folders){
   
   model <- paste0('n = ',n, ' and sigma2 = ', sigma2)
   
-  K <- 6
-  nt <- 50
-  gamma <- 0
-  Z <- c(1,1,0,1,0,0)
-  p <- 6
+  K <- 10
+  nt <- 100
+  #gamma <- 0
+  Z <- c(1,0)
+  p <- 2
 
   load(paste0(case,"/results.RData"))
   load(paste0(case,"/data_1.RData"))
+  load(paste0(case,"/datastd_1.RData"))
   
   # results for selection
   res_b <- matrix(do.call(rbind, lapply(results, `[[`, 1)), ncol = K*p, byrow = TRUE)
@@ -77,22 +78,21 @@ for(case in sub_folders){
   n_sel <- sum(sapply(1:100, function(sim){sum(Zhat[sim,] == Z) == p}))
   
   # AMSE
-  ids <- split(1:(K*p), rep(1:p, each = K))
-  amse <- mean(sapply(1:100, function(i){rss(i, data, results, std = FALSE)}))
+  #ids <- split(1:(K*p), rep(1:p, each = K))
+  #amse <- mean(sapply(1:100, function(i){rss(i, data, results, std = FALSE)}))
  
   
   
-  res <- rbind(res, data.frame(Case = model, AMSE = round(amse, 4), Correct = n_sel, Mean_time = round(mean(res_time), 4), 
-                               Mean_iter = round(mean(res_iter), 4)))
+  #res <- rbind(res, data.frame(Case = model, AMSE = round(amse, 4), Correct = n_sel, Mean_time = round(mean(res_time), 4), Mean_iter = round(mean(res_iter), 4)))
   res2 <- rbind(res2, data.frame(Case = model, n_sel_j))
   res3 <- rbind(res3, data.frame(Case = model, n_sel_j2))
   
-  B <- data$B
-  beta <- data$beta
+  #B <- data$B
+  #beta <- data$beta
   
-  time_points <- cbind(seq(0, 1, length.out = nt), seq(0, pi/3, length.out = nt),
-                       seq(-1, 1, length.out = nt), seq(0, pi/3, length.out = nt),
-                       seq(-2, 1, length.out = nt), seq(-1, 1, length.out = nt))
+  #time_points <- cbind(seq(0, 1, length.out = nt), seq(0, pi/3, length.out = nt),
+  #                     seq(-1, 1, length.out = nt), seq(0, pi/3, length.out = nt),
+  #                     seq(-2, 1, length.out = nt), seq(-1, 1, length.out = nt))
   
   ids <- split(1:(K*p), rep(1:p, each = K))
   
